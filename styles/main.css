@@ -1,0 +1,7 @@
+/* Main CSS for AGENDA */
+
+/* 
+   Keeping it minimal as requested.
+   Streamlit handles the native theme (Light/Dark) automatically.
+   Custom containers are now handled by native st.container(border=True).
+*/
