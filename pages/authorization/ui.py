@@ -8,10 +8,12 @@ import streamlit as st
 from pages.authorization.data import (
     check_google_connection,
     check_github_connection,
+    check_gmail_connection,
     disconnect_google,
-    disconnect_github
+    disconnect_github,
+    disconnect_gmail
 )
-from pages.authorization.logic import google_auth_flow, github_auth_flow
+from pages.authorization.logic import google_auth_flow, github_auth_flow, gmail_auth_flow
 
 
 def distinct_authorization_page():
@@ -20,13 +22,15 @@ def distinct_authorization_page():
     
     user_id = st.session_state.user['id']
     
-    # --- Google Calendar Section ---
+    # --- Google Services Section ---
+    st.subheader("🔷 Google Integration")
+    
+    # 1. Google Calendar
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
-        
         with col1:
-            st.subheader("📅 Google Calendar")
-            st.caption("Sync your events and manage your schedule")
+            st.markdown("#### 📅 Google Calendar")
+            st.caption("Manage events and meetings")
         
         google_status = check_google_connection(user_id)
         
@@ -38,13 +42,38 @@ def distinct_authorization_page():
         
         if google_status:
             st.info(f"Connected since: {google_status['connected_at'].strftime('%b %d, %Y') if google_status['connected_at'] else 'Unknown'}")
-            
-            if st.button("🔌 Disconnect Google Calendar", key="disconnect_google", type="secondary"):
+            if st.button("🔌 Disconnect Calendar", key="disconnect_google", type="secondary"):
                 disconnect_google(user_id)
                 st.success("Google Calendar disconnected!")
                 st.rerun()
         else:
             google_auth_flow()
+
+    st.markdown("") # Spacing
+
+    # 2. Gmail
+    with st.container(border=True):
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.markdown("#### ✉️ Gmail")
+            st.caption("Read and send emails")
+        
+        gmail_status = check_gmail_connection(user_id)
+        
+        with col2:
+            if gmail_status:
+                st.success("Connected", icon="✅")
+            else:
+                st.warning("Not Connected", icon="⚠️")
+        
+        if gmail_status:
+            st.info(f"Connected since: {gmail_status['connected_at'].strftime('%b %d, %Y') if gmail_status['connected_at'] else 'Unknown'}")
+            if st.button("🔌 Disconnect Gmail", key="disconnect_gmail", type="secondary"):
+                disconnect_gmail(user_id)
+                st.success("Gmail disconnected!")
+                st.rerun()
+        else:
+            gmail_auth_flow()
     
     st.divider()
     

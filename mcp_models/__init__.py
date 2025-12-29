@@ -17,15 +17,20 @@ from mcp_models.github import MCPGitHubTools, get_github_tools, execute_github_t
 from mcp_models.search import MCPSearchTools, get_search_tools, execute_search_tool
 from pages.authorization.data import check_github_connection
 
+from mcp_models.gmail import MCPGmailTools, get_gmail_tools, execute_gmail_tool
 
 def get_tools(user_id: int) -> List[Dict[str, Any]]:
-    """Get all available tools (calendar + GitHub + Search) for the user."""
+    """Get all available tools (calendar + GitHub + Search + Gmail) for the user."""
     # Get calendar tools
     tools = get_calendar_tools(user_id)
     
     # Get search tools
     search_tools = get_search_tools(user_id)
     tools.extend(search_tools)
+    
+    # Get Gmail tools
+    gmail_tools = get_gmail_tools(user_id)
+    tools.extend(gmail_tools)
     
     # Try to get GitHub tools (if connected)
     try:
@@ -73,7 +78,7 @@ def get_tools(user_id: int) -> List[Dict[str, Any]]:
 
 
 async def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute any MCP tool (calendar, GitHub, or Search) by name."""
+    """Execute any MCP tool (calendar, GitHub, Search, or Gmail) by name."""
     # Check if it's a GitHub tool
     if tool_name.startswith('github_'):
         try:
@@ -87,6 +92,13 @@ async def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any])
             return await execute_search_tool(user_id, tool_name, parameters)
         except Exception as e:
             return {'success': False, 'error': f"Search tool error: {str(e)}"}
+
+    # Check if it's a Gmail tool
+    if tool_name.startswith('gmail_'):
+        try:
+            return await execute_gmail_tool(user_id, tool_name, parameters)
+        except Exception as e:
+            return {'success': False, 'error': f"Gmail tool error: {str(e)}"}
     
     # Otherwise, it's a calendar tool
     return await execute_calendar_tool(user_id, tool_name, parameters)
@@ -108,4 +120,8 @@ __all__ = [
     'MCPSearchTools',
     'get_search_tools',
     'execute_search_tool',
+    # Gmail
+    'MCPGmailTools',
+    'get_gmail_tools',
+    'execute_gmail_tool',
 ]

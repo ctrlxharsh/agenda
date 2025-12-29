@@ -4,6 +4,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
+GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 REDIRECT_URI = "http://localhost:8501"  # Streamlit port
 
 # In a real app, you would load this from a file or env vars.
@@ -11,12 +12,19 @@ REDIRECT_URI = "http://localhost:8501"  # Streamlit port
 # If the user doesn't have one, we can't do the real redirect flow easily without manual token pasting.
 CLIENT_SECRETS_FILE = "client_secret.json"
 
-def get_flow():
+def get_flow(additional_scopes=None, override_scopes=None):
     if not os.path.exists(CLIENT_SECRETS_FILE):
         return None
     
+    if override_scopes:
+        current_scopes = override_scopes
+    else:
+        current_scopes = SCOPES.copy()
+        if additional_scopes:
+            current_scopes.extend(additional_scopes)
+    
     flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-        CLIENT_SECRETS_FILE, scopes=SCOPES)
+        CLIENT_SECRETS_FILE, scopes=current_scopes)
     flow.redirect_uri = REDIRECT_URI
     return flow
 
