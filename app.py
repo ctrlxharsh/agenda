@@ -56,6 +56,10 @@ def main():
                 st.session_state.current_page = "Workboard"
                 st.rerun()
 
+            if st.button("Authorization", type="primary" if st.session_state.current_page == "Authorization" else "secondary", use_container_width=True):
+                st.session_state.current_page = "Authorization"
+                st.rerun()
+
             st.divider()
             if st.button("Logout", use_container_width=True):
                 st.session_state.authenticated = False
@@ -78,6 +82,9 @@ def main():
         elif st.session_state.current_page == "Workboard":
             from pages.todo.ui import distinct_todo_page
             distinct_todo_page()
+        elif st.session_state.current_page == "Authorization":
+            from pages.authorization.ui import distinct_authorization_page
+            distinct_authorization_page()
 
 if __name__ == "__main__":
     main()

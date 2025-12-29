@@ -19,15 +19,16 @@ def distinct_home_page():
     </style>
     """, unsafe_allow_html=True)
 
-    # AI Assistant Header
-    st.subheader("🤖 AI Assistant")
-    st.caption("Ask me anything or manage your calendar with natural language!")
-    
+        
     # Fixed Clear button at top right
     with st.container():
-        cols = st.columns([9, 1])
+        cols = st.columns([9, 2])
+        with cols[0]:
+            # AI Assistant Header
+            st.subheader("🤖 AI Assistant")
+            st.caption("Ask me anything or manage your calendar with natural language!")
         with cols[1]:
-            if st.button("🗑️", help="Clear chat history", use_container_width=True):
+            if st.button("Clear chat history 🗑️", use_container_width=True):
                 st.session_state.chat_messages = []
                 st.rerun()
     
