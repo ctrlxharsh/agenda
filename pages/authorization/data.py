@@ -26,6 +26,25 @@ def check_google_connection(user_id: int) -> dict | None:
     return None
 
 
+def check_gmail_connection(user_id: int) -> dict | None:
+    """
+    Check if user has Gmail connected.
+    Returns connection details if connected, None otherwise.
+    """
+    query = """
+    SELECT access_token, connected_at 
+    FROM user_gmail_accounts 
+    WHERE user_id = %s
+    """
+    result = execute_query(query, (user_id,), fetch_one=True)
+    if result:
+        return {
+            "connected": True,
+            "connected_at": result[1]
+        }
+    return None
+
+
 def check_github_connection(user_id: int) -> dict | None:
     """
     Check if user has GitHub connected.
@@ -51,6 +70,15 @@ def disconnect_google(user_id: int) -> bool:
     Remove Google Calendar connection for user.
     """
     query = "DELETE FROM user_google_accounts WHERE user_id = %s"
+    execute_query(query, (user_id,))
+    return True
+
+
+def disconnect_gmail(user_id: int) -> bool:
+    """
+    Remove Gmail connection for user.
+    """
+    query = "DELETE FROM user_gmail_accounts WHERE user_id = %s"
     execute_query(query, (user_id,))
     return True
 
