@@ -60,9 +60,11 @@ class MCPCalendarTools:
         title: str,
         description: str = "",
         due_date: Optional[str] = None,
+        scheduled_date: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
         priority: str = "medium",
         category: str = "general",
-        end_time: Optional[str] = None,
         meeting_link: str = ""
     ) -> Dict[str, Any]:
         """
@@ -71,43 +73,80 @@ class MCPCalendarTools:
         Args:
             title: Task/Event title
             description: Description
-            due_date: Start date/time (YYYY-MM-DD HH:MM)
+            due_date: Deadline/completion DATE (YYYY-MM-DD)
+            scheduled_date: When task is scheduled DATE (YYYY-MM-DD)
+            start_time: Start TIME (HH:MM)
+            end_time: End TIME (HH:MM)
             priority: Priority (low, medium, high, urgent)
             category: Category
-            end_time: Optional end time (defaults to 1 hour after start)
             meeting_link: Optional meeting link
             
         Returns:
             Dict containing task_id, event_id, and status message
         """
         try:
-            # Parse due date
+            # Parse due date (DATE only)
+            parsed_due_date = None
             if due_date:
                 try:
-                    # Try parsing ISO format first
-                    parsed_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    dt = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    parsed_due_date = dt.date()
                 except ValueError:
-                    # If that fails, try common formats
                     from dateutil import parser
-                    parsed_date = parser.parse(due_date)
+                    dt = parser.parse(due_date)
+                    parsed_due_date = dt.date()
             else:
-                # Default to tomorrow at 10 AM
-                parsed_date = datetime.now() + timedelta(days=1)
-                parsed_date = parsed_date.replace(hour=10, minute=0, second=0, microsecond=0)
+                # Default to tomorrow
+                parsed_due_date = (datetime.now() + timedelta(days=1)).date()
+            
+            # Parse scheduled date (DATE only)
+            parsed_scheduled_date = None
+            if scheduled_date:
+                try:
+                    dt = datetime.fromisoformat(scheduled_date.replace('Z', '+00:00'))
+                    parsed_scheduled_date = dt.date()
+                except ValueError:
+                    from dateutil import parser
+                    dt = parser.parse(scheduled_date)
+                    parsed_scheduled_date = dt.date()
+            else:
+                # Default scheduled date to same as due date
+                parsed_scheduled_date = parsed_due_date
+            
+            # Parse start time (TIME only)
+            parsed_start_time = None
+            if start_time:
+                try:
+                    dt = datetime.strptime(start_time, '%H:%M')
+                    parsed_start_time = dt.time()
+                except ValueError:
+                    # Try with seconds
+                    dt = datetime.strptime(start_time, '%H:%M:%S')
+                    parsed_start_time = dt.time()
+            
+            # Parse end time (TIME only)
+            parsed_end_time = None
+            if end_time:
+                try:
+                    dt = datetime.strptime(end_time, '%H:%M')
+                    parsed_end_time = dt.time()
+                except ValueError:
+                    dt = datetime.strptime(end_time, '%H:%M:%S')
+                    parsed_end_time = dt.time()
             
             # Insert task into database
             task_query = """
             INSERT INTO tasks (
                 user_id, title, description, status, priority, 
-                category, due_date, created_at, updated_at
+                category, due_date, scheduled_date, start_time, end_time, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             RETURNING task_id
             """
             
             task_result = await execute_query_async(
                 task_query,
-                (self.user_id, title, description, 'task', priority, category, parsed_date),
+                (self.user_id, title, description, 'task', priority, category, parsed_due_date, parsed_scheduled_date, parsed_start_time, parsed_end_time),
                 fetch_one=True
             )
             
@@ -128,26 +167,33 @@ class MCPCalendarTools:
                     from dateutil import parser
                     parsed_end = parser.parse(end_time)
             
-            # Default end time if not provided
-            if not parsed_end:
-                parsed_end = parsed_date + timedelta(hours=1)
-                
             # Create calendar event
-            event_start = parsed_date
-            event_end = parsed_end
+            # Combine date and time for Google Calendar and internal logic
+            if parsed_start_time:
+                event_start = datetime.combine(parsed_scheduled_date, parsed_start_time)
+            else:
+                # Default to 9 AM if no time specified ? or midnight
+                event_start = datetime.combine(parsed_scheduled_date, datetime.min.time())
+
+            if parsed_end_time:
+                event_end = datetime.combine(parsed_scheduled_date, parsed_end_time)
+            elif parsed_end:
+                 event_end = parsed_end # from line 165
+            else:
+                 event_end = event_start + timedelta(hours=1)
             
             # Insert into calendar_events table
             event_query = """
             INSERT INTO calendar_events (
-                task_id, user_id, start_time, end_time, event_desc, created_at
+                task_id, user_id, start_time, end_time, due_date, scheduled_date, event_desc, event_type, created_at
             )
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'task', NOW())
             RETURNING event_id
             """
             
             event_result = await execute_query_async(
                 event_query,
-                (task_id, self.user_id, event_start, event_end, description),
+                (task_id, self.user_id, parsed_start_time, parsed_end_time, parsed_due_date, parsed_scheduled_date, description),
                 fetch_one=True
             )
             
@@ -221,7 +267,7 @@ class MCPCalendarTools:
                         google_sync_message = f"\n\n⚠️ **Google Calendar Sync Failed**: {error_msg}. Task saved to database only."
                     print(f"Google Calendar sync failed: {e}")
             
-            success_message = f"Task '{title}' added successfully! Due: {parsed_date.strftime('%Y-%m-%d %H:%M')}{google_sync_message}"
+            success_message = f"Task '{title}' added successfully! Due: {parsed_due_date.strftime('%Y-%m-%d')} {parsed_start_time.strftime('%H:%M') if parsed_start_time else ''}{google_sync_message}"
             
             return {
                 'success': True,
@@ -645,6 +691,9 @@ class MCPCalendarTools:
         title: str,
         description: str = "",
         due_date: Optional[str] = None,
+        scheduled_date: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
         priority: str = "medium",
         category: str = "general"
     ) -> Dict[str, Any]:
@@ -654,7 +703,10 @@ class MCPCalendarTools:
         Args:
             title: Task title
             description: Task description
-            due_date: Optional due date
+            due_date: Deadline/completion DATE (YYYY-MM-DD)
+            scheduled_date: When task is scheduled DATE (YYYY-MM-DD)
+            start_time: Start TIME (HH:MM)
+            end_time: End TIME (HH:MM)
             priority: Task priority
             category: Task category
             
@@ -662,28 +714,64 @@ class MCPCalendarTools:
             Dict containing task_id and status
         """
         try:
-            # Parse due date if provided
-            parsed_date = None
+            # Parse due date (DATE only)
+            parsed_due_date = None
             if due_date:
                 try:
-                    parsed_date = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    dt = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    parsed_due_date = dt.date()
                 except ValueError:
                     from dateutil import parser
-                    parsed_date = parser.parse(due_date)
+                    dt = parser.parse(due_date)
+                    parsed_due_date = dt.date()
+            
+            # Parse scheduled date (DATE only)
+            parsed_scheduled_date = None
+            if scheduled_date:
+                try:
+                    dt = datetime.fromisoformat(scheduled_date.replace('Z', '+00:00'))
+                    parsed_scheduled_date = dt.date()
+                except ValueError:
+                    from dateutil import parser
+                    dt = parser.parse(scheduled_date)
+                    parsed_scheduled_date = dt.date()
+            else:
+                # Default scheduled date to same as due date
+                parsed_scheduled_date = parsed_due_date
+            
+            # Parse start time (TIME only)
+            parsed_start_time = None
+            if start_time:
+                try:
+                    dt = datetime.strptime(start_time, '%H:%M')
+                    parsed_start_time = dt.time()
+                except ValueError:
+                    dt = datetime.strptime(start_time, '%H:%M:%S')
+                    parsed_start_time = dt.time()
+            
+            # Parse end time (TIME only)
+            parsed_end_time = None
+            if end_time:
+                try:
+                    dt = datetime.strptime(end_time, '%H:%M')
+                    parsed_end_time = dt.time()
+                except ValueError:
+                    dt = datetime.strptime(end_time, '%H:%M:%S')
+                    parsed_end_time = dt.time()
             
             # Insert task into database
             task_query = """
             INSERT INTO tasks (
                 user_id, title, description, status, priority, 
-                category, due_date, created_at, updated_at
+                category, due_date, scheduled_date, start_time, end_time, created_at, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
             RETURNING task_id
             """
             
             task_result = await execute_query_async(
                 task_query,
-                (self.user_id, title, description, 'todo', priority, category, parsed_date),
+                (self.user_id, title, description, 'todo', priority, category, parsed_due_date, parsed_scheduled_date, parsed_start_time, parsed_end_time),
                 fetch_one=True
             )
             
@@ -695,7 +783,7 @@ class MCPCalendarTools:
                     'error': 'Failed to create task'
                 }
             
-            due_msg = f" (Due: {parsed_date.strftime('%Y-%m-%d %H:%M')})" if parsed_date else ""
+            due_msg = f" (Due: {parsed_due_date.strftime('%Y-%m-%d %H:%M')})" if parsed_due_date else ""
             
             return {
                 'success': True,
@@ -712,13 +800,17 @@ class MCPCalendarTools:
     async def schedule_meeting(
         self,
         title: str,
+        scheduled_date: str,
         start_time: str,
         end_time: Optional[str] = None,
+        due_date: Optional[str] = None,
+        priority: str = "medium",
         description: str = "",
         collaborator_ids: Optional[List[int]] = None,
         collaborator_emails: Optional[List[str]] = None,
         meeting_code: Optional[str] = None,
-        auto_generate_link: bool = True
+        auto_generate_link: bool = True,
+        duration_hours: float = 2.0
     ) -> Dict[str, Any]:
         """
         Schedule a meeting with collaborators and meeting link.
@@ -726,48 +818,102 @@ class MCPCalendarTools:
         
         Args:
             title: Meeting title
-            start_time: Start time
-            end_time: End time (optional)
+            scheduled_date: Scheduled DATE (YYYY-MM-DD)
+            start_time: Start TIME (HH:MM or HH:MM:SS)
+            end_time: End TIME (optional)
+            due_date: Deadline/completion date (optional, defaults to scheduled_date)
+            priority: Priority (low, medium, high, urgent)
             description: Meeting description
             collaborator_ids: List of collaborator user IDs (from friends list)
-            collaborator_emails: List of email addresses to invite (can be anyone)
-            meeting_code: Existing meeting code/link (optional)
+            collaborator_emails: List of email addresses to invite
+            meeting_code: Existing meeting code/link
             auto_generate_link: Whether to auto-generate Google Meet link
+            duration_hours: Duration in hours (used if end_time not provided)
             
         Returns:
             Dict containing event details and status
         """
         try:
-            # Parse times
+            # Parse scheduled date (DATE only)
+            parsed_scheduled_date = None
             try:
-                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                dt = datetime.fromisoformat(scheduled_date.replace('Z', '+00:00'))
+                parsed_scheduled_date = dt.date()
             except ValueError:
                 from dateutil import parser
-                parsed_start = parser.parse(start_time)
-            
-            if end_time:
+                dt = parser.parse(scheduled_date)
+                parsed_scheduled_date = dt.date()
+
+            # Parse due date (defaults to scheduled_date if not provided)
+            parsed_due_date = None
+            if due_date:
                 try:
-                    parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                    dt = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    parsed_due_date = dt.date()
                 except ValueError:
                     from dateutil import parser
-                    parsed_end = parser.parse(end_time)
+                    dt = parser.parse(due_date)
+                    parsed_due_date = dt.date()
             else:
-                parsed_end = parsed_start + timedelta(hours=1)
+                parsed_due_date = parsed_scheduled_date
+
+            # Parse start time (TIME only)
+            parsed_start_time = None
+            try:
+                dt = datetime.strptime(start_time, '%H:%M')
+                parsed_start_time = dt.time()
+            except ValueError:
+                try:
+                    dt = datetime.strptime(start_time, '%H:%M:%S')
+                    parsed_start_time = dt.time()
+                except ValueError:
+                    # Fallback if start_time contains date
+                    from dateutil import parser
+                    dt = parser.parse(start_time)
+                    parsed_start_time = dt.time()
+
+            # Parse end time or calculate from duration
+            parsed_end_time = None
+            if end_time:
+                try:
+                    dt = datetime.strptime(end_time, '%H:%M')
+                    parsed_end_time = dt.time()
+                except ValueError:
+                    try:
+                        dt = datetime.strptime(end_time, '%H:%M:%S')
+                        parsed_end_time = dt.time()
+                    except ValueError:
+                         # Fallback
+                        from dateutil import parser
+                        dt = parser.parse(end_time)
+                        parsed_end_time = dt.time()
+            else:
+                # Calculate end_time from duration
+                start_dt_for_calc = datetime.combine(parsed_scheduled_date, parsed_start_time)
+                end_dt_for_calc = start_dt_for_calc + timedelta(hours=duration_hours)
+                parsed_end_time = end_dt_for_calc.time()
+
+            # Construct datetimes for Google Calendar
+            event_start = datetime.combine(parsed_scheduled_date, parsed_start_time)
+            event_end = datetime.combine(parsed_scheduled_date, parsed_end_time)
             
-            # Create calendar event with event_type = 'meeting'
+            # Handle crossover to next day for event_end if needed
+            if parsed_end_time < parsed_start_time:
+                 event_end += timedelta(days=1)
+
             # Create backing task first
             task_query = """
             INSERT INTO tasks (
                 user_id, title, description, status, priority, 
-                category, due_date, created_at, updated_at
+                category, due_date, scheduled_date, start_time, end_time, created_at, updated_at
             )
-            VALUES (%s, %s, %s, 'meeting', 'medium', 'general', %s, NOW(), NOW())
+            VALUES (%s, %s, %s, 'meeting', %s, 'general', %s, %s, %s, %s, NOW(), NOW())
             RETURNING task_id
             """
             
             task_result = await execute_query_async(
                 task_query,
-                (self.user_id, title, description, parsed_start),
+                (self.user_id, title, description, priority, parsed_due_date, parsed_scheduled_date, parsed_start_time, parsed_end_time),
                 fetch_one=True
             )
             task_id = task_result[0] if task_result else None
@@ -777,15 +923,15 @@ class MCPCalendarTools:
             
             event_query = """
             INSERT INTO calendar_events (
-                task_id, user_id, start_time, end_time, event_desc, event_type, created_at
+                task_id, user_id, start_time, end_time, due_date, scheduled_date, event_desc, event_type, created_at
             )
-            VALUES (%s, %s, %s, %s, %s, 'meeting', NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'meeting', NOW())
             RETURNING event_id
             """
             
             event_result = await execute_query_async(
                 event_query,
-                (task_id, self.user_id, parsed_start, parsed_end, full_desc),
+                (task_id, self.user_id, parsed_start_time, parsed_end_time, parsed_due_date, parsed_scheduled_date, full_desc),
                 fetch_one=True
             )
             
@@ -811,16 +957,16 @@ class MCPCalendarTools:
                             'summary': f"🤝 {title}",
                             'description': description,
                             'start': {
-                                'dateTime': parsed_start.isoformat(),
+                                'dateTime': event_start.isoformat(),
                                 'timeZone': 'Asia/Kolkata',
                             },
                             'end': {
-                                'dateTime': parsed_end.isoformat(),
+                                'dateTime': event_end.isoformat(),
                                 'timeZone': 'Asia/Kolkata',
                             },
                         }
                         
-                        # Add conference data if auto-generating
+                        # Add conferenceData if auto-generating
                         if auto_generate_link and not meeting_code:
                             event_body['conferenceData'] = {
                                 'createRequest': {
@@ -893,10 +1039,12 @@ class MCPCalendarTools:
                 'success': True,
                 'event_id': event_id,
                 'google_event_id': google_event_id,
-                'message': f"Meeting '{title}' scheduled for {parsed_start.strftime('%Y-%m-%d %H:%M')}{google_sync_message}{collab_message}{link_message}"
+                'message': f"Meeting '{title}' scheduled for {event_start.strftime('%Y-%m-%d %H:%M')}{google_sync_message}{collab_message}{link_message}"
             }
             
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             return {
                 'success': False,
                 'error': f"Failed to schedule meeting: {str(e)}"
@@ -948,20 +1096,21 @@ class MCPCalendarTools:
                 ml.meeting_url,
                 e.event_type,
                 t.description as task_desc,
-                e.event_desc
+                e.event_desc,
+                e.scheduled_date
             FROM calendar_events e
             LEFT JOIN tasks t ON e.task_id = t.task_id
             LEFT JOIN meeting_links ml ON e.event_id = ml.event_id
             WHERE e.user_id = %s 
-            AND e.start_time >= %s 
-            AND e.start_time <= %s
-            ORDER BY e.start_time ASC
+            AND e.scheduled_date >= %s 
+            AND e.scheduled_date <= %s
+            ORDER BY e.scheduled_date ASC, e.start_time ASC
             LIMIT %s
             """
             
             results = await execute_query_async(
                 query, 
-                (self.user_id, parsed_start, parsed_end, limit),
+                (self.user_id, parsed_start.date(), parsed_end.date(), limit),
                 fetch_all=True
             )
             
@@ -969,15 +1118,34 @@ class MCPCalendarTools:
             if results:
                 for row in results:
                     # Logic to determine description
-                    # If it's a task, description is in task_desc (row[7])
-                    # If it's a meeting, description is in event_desc (row[8])
+                    # If it's a task, description is in task_desc (row[6])
+                    # If it's a meeting, description is in event_desc (row[7])
                     description = row[6] if row[6] else row[7]
+                    
+                    scheduled_date = row[8]
+                    start_time = row[2]
+                    end_time = row[3]
+                    
+                    # Construct full ISO strings if date and time exist
+                    start_iso = None
+                    end_iso = None
+                    
+                    if scheduled_date and start_time:
+                         start_iso = datetime.combine(scheduled_date, start_time).isoformat()
+                    
+                    if scheduled_date and end_time:
+                        # Handle overnight events if needed, but for now assume same day or handle simplistic
+                        # If end_time < start_time, it implies next day
+                        if start_time and end_time < start_time:
+                             end_iso = datetime.combine(scheduled_date + timedelta(days=1), end_time).isoformat()
+                        else:
+                             end_iso = datetime.combine(scheduled_date, end_time).isoformat()
                     
                     events.append({
                         'event_id': row[0],
                         'title': row[1],
-                        'start_time': row[2].isoformat() if row[2] else None,
-                        'end_time': row[3].isoformat() if row[3] else None,
+                        'start_time': start_iso,
+                        'end_time': end_iso,
                         'meeting_link': row[4],
                         'type': row[5] if row[5] else ('task' if row[6] else 'event'),
                         'description': description
@@ -995,6 +1163,187 @@ class MCPCalendarTools:
                 'success': False,
                 'error': f"Failed to fetch events: {str(e)}"
             }
+    
+    async def check_schedule_conflicts(
+        self,
+        scheduled_date: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None,
+        duration_hours: float = 2.0
+    ) -> Dict[str, Any]:
+        """
+        Check for scheduling conflicts on a given date/time.
+        Checks tasks.scheduled_date and start_time/end_time for overlaps.
+        
+        Args:
+            scheduled_date: The proposed scheduled date (YYYY-MM-DD)
+            start_time: The proposed start time (HH:MM)
+            end_time: The proposed end time (HH:MM)
+            duration_hours: Expected duration in hours (default: 2.0)
+            
+        Returns:
+            Dict containing conflicts and suggested alternative times
+        """
+        try:
+            # Parse scheduled date
+            try:
+                parsed_date = datetime.fromisoformat(scheduled_date.replace('Z', '+00:00')).date()
+            except ValueError:
+                from dateutil import parser
+                parsed_date = parser.parse(scheduled_date).date()
+            
+            # Parse start time
+            parsed_start_time = None
+            if start_time:
+                try:
+                    parsed_start_time = datetime.strptime(start_time, '%H:%M').time()
+                except ValueError:
+                    parsed_start_time = datetime.strptime(start_time, '%H:%M:%S').time()
+            
+            # Parse end time
+            parsed_end_time = None
+            if end_time:
+                try:
+                    parsed_end_time = datetime.strptime(end_time, '%H:%M').time()
+                except ValueError:
+                    parsed_end_time = datetime.strptime(end_time, '%H:%M:%S').time()
+            elif parsed_start_time:
+                # Calculate end time from duration
+                start_dt = datetime.combine(parsed_date, parsed_start_time)
+                end_dt = start_dt + timedelta(hours=duration_hours)
+                parsed_end_time = end_dt.time()
+            
+            # Query for tasks on the same day
+            conflict_query = """
+            SELECT 
+                task_id,
+                title,
+                scheduled_date,
+                due_date,
+                start_time,
+                end_time,
+                priority,
+                status,
+                description
+            FROM tasks
+            WHERE user_id = %s 
+              AND scheduled_date IS NOT NULL
+              AND scheduled_date = %s
+            ORDER BY start_time NULLS LAST, scheduled_date
+            """
+            
+            results = await execute_query_async(
+                conflict_query,
+                (self.user_id, parsed_date),
+                fetch_all=True
+            )
+            
+            conflicts = []
+            has_time_overlap = False
+            
+            for row in results:
+                task_id, title, scheduled_date, due_date, start_time, end_time, priority, status, description = row
+                
+                # Check for time overlap if both tasks have start/end times
+                is_time_overlap = False
+                if parsed_start_time and parsed_end_time and start_time and end_time:
+                    # Check if time ranges overlap
+                    if start_time < parsed_end_time and end_time > parsed_start_time:
+                        is_time_overlap = True
+                        has_time_overlap = True
+                
+                conflicts.append({
+                    'task_id': task_id,
+                    'title': title,
+                    'scheduled_date': scheduled_date.isoformat() if scheduled_date else None,
+                    'due_date': due_date.isoformat() if due_date else None,
+                    'start_time': start_time.strftime('%H:%M') if start_time else None,
+                    'end_time': end_time.strftime('%H:%M') if end_time else None,
+                    'priority': priority,
+                    'status': status,
+                    'description': description[:100] if description else None,
+                    'is_time_overlap': is_time_overlap
+                })
+            
+            # Suggest alternative times if conflicts exist
+            suggested_times = []
+            if has_time_overlap and parsed_start_time:
+                # Find free time slots on the same day
+                day_start = datetime.strptime('09:00', '%H:%M').time()
+                day_end = datetime.strptime('18:00', '%H:%M').time()
+                
+                current_time = day_start
+                while current_time < day_end and len(suggested_times) < 3:
+                    # Calculate slot end time
+                    slot_start_dt = datetime.combine(parsed_date, current_time)
+                    slot_end_dt = slot_start_dt + timedelta(hours=duration_hours)
+                    slot_end_time = slot_end_dt.time()
+                    
+                    # Check if this slot conflicts
+                    is_free = True
+                    for conflict in conflicts:
+                        if conflict['start_time'] and conflict['end_time']:
+                            conf_start = datetime.strptime(conflict['start_time'], '%H:%M').time()
+                            conf_end = datetime.strptime(conflict['end_time'], '%H:%M').time()
+                            
+                            if current_time < conf_end and slot_end_time > conf_start:
+                                is_free = False
+                                break
+                    
+                    if is_free:
+                        suggested_times.append(current_time.strftime('%H:%M'))
+                    
+                    # Move to next 30-minute slot
+                    next_dt = datetime.combine(parsed_date, current_time) + timedelta(minutes=30)
+                    current_time = next_dt.time()
+            
+            # Suggest alternative dates if no free times on same day
+            suggested_dates = []
+            if conflicts and not suggested_times:
+                current_day = parsed_date + timedelta(days=1)
+                days_checked = 0
+                
+                while len(suggested_dates) < 3 and days_checked < 7:
+                    check_query = """
+                    SELECT COUNT(*) 
+                    FROM tasks 
+                    WHERE user_id = %s 
+                      AND scheduled_date = %s
+                    """
+                    count_result = await execute_query_async(
+                        check_query,
+                        (self.user_id, current_day),
+                        fetch_one=True
+                    )
+                    
+                    if count_result and count_result[0] == 0:
+                        suggested_dates.append(current_day.isoformat())
+                    
+                    current_day += timedelta(days=1)
+                    days_checked += 1
+            
+            return {
+                'success': True,
+                'has_conflicts': len(conflicts) > 0,
+                'has_time_overlap': has_time_overlap,
+                'conflict_count': len(conflicts),
+                'conflicts': conflicts,
+                'suggested_times': suggested_times,
+                'suggested_dates': suggested_dates,
+                'message': f"Found {len(conflicts)} task(s) on {parsed_date.strftime('%Y-%m-%d')}" + 
+                          (f" ({len([c for c in conflicts if c['is_time_overlap']])} time overlap(s))" if has_time_overlap else "") 
+                          if conflicts else "No conflicts found"
+            }
+            
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"ERROR in check_schedule_conflicts: {error_details}")
+            return {
+                'success': False,
+                'error': f"Failed to check conflicts: {str(e)}"
+            }
+
 
 
 def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
@@ -1033,43 +1382,80 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
             },
             'function': tools_instance.get_calendar_events
         },
+        
+        {
+            'name': 'check_schedule_conflicts',
+            'description': 'Check for scheduling conflicts on a given date/time. Shows existing tasks and checks for time overlaps using start_time and end_time.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'scheduled_date': {
+                        'type': 'string',
+                        'description': 'The proposed scheduled date (YYYY-MM-DD)'
+                    },
+                    'start_time': {
+                        'type': 'string',
+                        'description': 'The proposed start time (HH:MM format, e.g., "14:30")'
+                    },
+                    'end_time': {
+                        'type': 'string',
+                        'description': 'The proposed end time (HH:MM format, e.g., "16:00")'
+                    },
+                    'duration_hours': {
+                        'type': 'number',
+                        'description': 'Expected duration in hours (default: 2.0, used if end_time not provided)'
+                    }
+                },
+                'required': ['scheduled_date']
+            },
+            'function': tools_instance.check_schedule_conflicts
+        },
+        
         {
             'name': 'add_task_to_calendar',
-            'description': 'Add a task or event to the user\'s calendar. Use this for tasks, todos, deadlines, OR simple time-blocking.',
+            'description': 'Add a task or event to the calendar with Google Calendar sync.',
             'parameters': {
                 'type': 'object',
                 'properties': {
                     'title': {
                         'type': 'string',
-                        'description': 'The title of the task or event'
+                        'description': 'Task or event title'
                     },
                     'description': {
                         'type': 'string',
-                        'description': 'Description of the task/event'
+                        'description': 'Detailed description'
                     },
                     'due_date': {
                         'type': 'string',
-                        'description': 'Start date/time (e.g., "2024-12-30 17:00")'
+                        'description': 'Deadline/completion DATE (YYYY-MM-DD)'
+                    },
+                    'scheduled_date': {
+                        'type': 'string',
+                        'description': 'When task is scheduled DATE (YYYY-MM-DD)'
+                    },
+                    'start_time': {
+                        'type': 'string',
+                        'description': 'Start TIME (HH:MM format)'
+                    },
+                    'end_time': {
+                        'type': 'string',
+                        'description': 'End TIME (HH:MM format)'
                     },
                     'priority': {
                         'type': 'string',
                         'enum': ['low', 'medium', 'high', 'urgent'],
-                        'description': 'Priority level'
+                        'description': 'Task priority'
                     },
                     'category': {
                         'type': 'string',
                         'description': 'Category or tag'
-                    },
-                    'end_time': {
-                        'type': 'string',
-                        'description': 'Optional end time for events'
                     },
                     'meeting_link': {
                         'type': 'string',
                         'description': 'Optional meeting link'
                     }
                 },
-                'required': ['title']
+                'required': ['title', 'priority', 'due_date', 'scheduled_date']
             },
             'function': tools_instance.add_task_to_calendar
         },
@@ -1155,7 +1541,19 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
                     },
                     'due_date': {
                         'type': 'string',
-                        'description': 'Optional due date'
+                        'description': 'Deadline/completion DATE (YYYY-MM-DD)'
+                    },
+                    'scheduled_date': {
+                        'type': 'string',
+                        'description': 'When task is scheduled DATE (YYYY-MM-DD)'
+                    },
+                    'start_time': {
+                        'type': 'string',
+                        'description': 'Start TIME (HH:MM format)'
+                    },
+                    'end_time': {
+                        'type': 'string',
+                        'description': 'End TIME (HH:MM format)'
                     },
                     'priority': {
                         'type': 'string',
@@ -1167,7 +1565,7 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
                         'description': 'Task category'
                     }
                 },
-                'required': ['title']
+                'required': ['title', 'priority', 'due_date', 'scheduled_date']
             },
             'function': tools_instance.save_todo_only
         },
@@ -1181,13 +1579,26 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
                         'type': 'string',
                         'description': 'Meeting title'
                     },
+                    'scheduled_date': {
+                        'type': 'string',
+                        'description': 'Scheduled DATE (YYYY-MM-DD)'
+                    },
                     'start_time': {
                         'type': 'string',
-                        'description': 'Start time of the meeting'
+                        'description': 'Start TIME (HH:MM format)'
                     },
                     'end_time': {
                         'type': 'string',
-                        'description': 'End time (optional, defaults to 1 hour)'
+                        'description': 'End TIME (HH:MM format)'
+                    },
+                    'due_date': {
+                        'type': 'string',
+                        'description': 'Deadline/completion DATE (YYYY-MM-DD)'
+                    },
+                    'priority': {
+                        'type': 'string',
+                        'enum': ['low', 'medium', 'high', 'urgent'],
+                        'description': 'Meeting priority'
                     },
                     'description': {
                         'type': 'string',
@@ -1210,9 +1621,13 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
                     'auto_generate_link': {
                         'type': 'boolean',
                         'description': 'Whether to auto-generate Google Meet link (default: true)'
+                    },
+                    'duration_hours': {
+                        'type': 'number',
+                        'description': 'Duration in hours (used if end_time not provided)'
                     }
                 },
-                'required': ['title', 'start_time']
+                'required': ['title', 'scheduled_date', 'start_time', 'priority']
             },
             'function': tools_instance.schedule_meeting
         }
