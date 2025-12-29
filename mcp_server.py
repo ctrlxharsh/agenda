@@ -60,17 +60,21 @@ class MCPCalendarTools:
         description: str = "",
         due_date: Optional[str] = None,
         priority: str = "medium",
-        category: str = "general"
+        category: str = "general",
+        end_time: Optional[str] = None,
+        meeting_link: str = ""
     ) -> Dict[str, Any]:
         """
-        Add a task to the calendar and database.
+        Add a task or event to the calendar and database.
         
         Args:
-            title: Task title
-            description: Task description
-            due_date: Due date in ISO format (YYYY-MM-DD HH:MM:SS) or natural language
-            priority: Task priority (low, medium, high, urgent)
-            category: Task category
+            title: Task/Event title
+            description: Description
+            due_date: Start date/time (YYYY-MM-DD HH:MM)
+            priority: Priority (low, medium, high, urgent)
+            category: Category
+            end_time: Optional end time (defaults to 1 hour after start)
+            meeting_link: Optional meeting link
             
         Returns:
             Dict containing task_id, event_id, and status message
@@ -102,7 +106,7 @@ class MCPCalendarTools:
             
             task_result = execute_query(
                 task_query,
-                (self.user_id, title, description, 'todo', priority, category, parsed_date),
+                (self.user_id, title, description, 'task', priority, category, parsed_date),
                 fetch_one=True
             )
             
@@ -114,9 +118,22 @@ class MCPCalendarTools:
                     'error': 'Failed to create task in database'
                 }
             
+            # Parse end time if provided
+            parsed_end = None
+            if end_time:
+                try:
+                    parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                except ValueError:
+                    from dateutil import parser
+                    parsed_end = parser.parse(end_time)
+            
+            # Default end time if not provided
+            if not parsed_end:
+                parsed_end = parsed_date + timedelta(hours=1)
+                
             # Create calendar event
             event_start = parsed_date
-            event_end = parsed_date + timedelta(hours=1)
+            event_end = parsed_end
             
             # Insert into calendar_events table
             event_query = """
@@ -134,6 +151,16 @@ class MCPCalendarTools:
             )
             
             event_id = event_result[0] if event_result else None
+            
+            # If meeting_link provided, store it
+            if meeting_link and event_id:
+                link_query = """
+                INSERT INTO meeting_links (event_id, platform, meeting_url, meeting_code)
+                VALUES (%s, 'custom', %s, %s)
+                """
+                # Use link as code if no slash, else extract last part
+                code = meeting_link.split('/')[-1] if '/' in meeting_link else meeting_link
+                execute_query(link_query, (event_id, meeting_link, code))
             
             # Try to sync with Google Calendar
             google_event_id = None
@@ -160,6 +187,9 @@ class MCPCalendarTools:
                         },
                         'colorId': '9' if priority == 'high' or priority == 'urgent' else '1',
                     }
+                    
+                    if meeting_link:
+                        event_body['location'] = meeting_link
                     
                     google_event = service.events().insert(
                         calendarId='primary',
@@ -204,124 +234,8 @@ class MCPCalendarTools:
                 'error': f"Failed to add task: {str(e)}"
             }
     
-    def schedule_event(
-        self,
-        title: str,
-        start_time: str,
-        end_time: Optional[str] = None,
-        description: str = "",
-        meeting_link: str = ""
-    ) -> Dict[str, Any]:
-        """
-        Schedule an event on the calendar.
-        
-        Args:
-            title: Event title
-            start_time: Start time in ISO format or natural language
-            end_time: End time in ISO format or natural language (defaults to 1 hour after start)
-            description: Event description
-            meeting_link: Optional meeting link
-            
-        Returns:
-            Dict containing event_id and status message
-        """
-        try:
-            # Parse start time
-            try:
-                parsed_start = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-            except ValueError:
-                from dateutil import parser
-                parsed_start = parser.parse(start_time)
-            
-            # Parse end time
-            if end_time:
-                try:
-                    parsed_end = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
-                except ValueError:
-                    from dateutil import parser
-                    parsed_end = parser.parse(end_time)
-            else:
-                # Default to 1 hour duration
-                parsed_end = parsed_start + timedelta(hours=1)
-            
-            # Insert into calendar_events table
-            event_query = """
-            INSERT INTO calendar_events (
-                user_id, start_time, end_time, event_desc, meeting_link, created_at
-            )
-            VALUES (%s, %s, %s, %s, %s, NOW())
-            RETURNING event_id
-            """
-            
-            event_result = execute_query(
-                event_query,
-                (self.user_id, parsed_start, parsed_end, description, meeting_link),
-                fetch_one=True
-            )
-            
-            event_id = event_result[0] if event_result else None
-            
-            if not event_id:
-                return {
-                    'success': False,
-                    'error': 'Failed to create event in database'
-                }
-            
-            # Try to sync with Google Calendar
-            google_event_id = None
-            creds = self.get_google_credentials()
-            
-            if creds:
-                try:
-                    service = build('calendar', 'v3', credentials=creds)
-                    
-                    event_body = {
-                        'summary': title,
-                        'description': description,
-                        'start': {
-                            'dateTime': parsed_start.isoformat(),
-                            'timeZone': 'UTC',
-                        },
-                        'end': {
-                            'dateTime': parsed_end.isoformat(),
-                            'timeZone': 'UTC',
-                        },
-                    }
-                    
-                    if meeting_link:
-                        event_body['location'] = meeting_link
-                    
-                    google_event = service.events().insert(
-                        calendarId='primary',
-                        body=event_body
-                    ).execute()
-                    
-                    google_event_id = google_event.get('id')
-                    
-                    # Update calendar_events with Google event reference
-                    if google_event_id:
-                        update_query = """
-                        UPDATE calendar_events 
-                        SET google_event_ref = %s 
-                        WHERE event_id = %s
-                        """
-                        execute_query(update_query, (google_event_id, event_id))
-                
-                except Exception as e:
-                    print(f"Google Calendar sync failed: {e}")
-            
-            return {
-                'success': True,
-                'event_id': event_id,
-                'google_event_id': google_event_id,
-                'message': f"Event '{title}' scheduled successfully! {parsed_start.strftime('%Y-%m-%d %H:%M')} - {parsed_end.strftime('%H:%M')}"
-            }
-            
-        except Exception as e:
-            return {
-                'success': False,
-                'error': f"Failed to schedule event: {str(e)}"
-            }
+    #  it is a task 
+
     
     def get_collaborators(
         self,
@@ -823,17 +737,37 @@ class MCPCalendarTools:
                 parsed_end = parsed_start + timedelta(hours=1)
             
             # Create calendar event with event_type = 'meeting'
+            # Create backing task first
+            task_query = """
+            INSERT INTO tasks (
+                user_id, title, description, status, priority, 
+                category, due_date, created_at, updated_at
+            )
+            VALUES (%s, %s, %s, 'meeting', 'medium', 'general', %s, NOW(), NOW())
+            RETURNING task_id
+            """
+            
+            task_result = execute_query(
+                task_query,
+                (self.user_id, title, description, parsed_start),
+                fetch_one=True
+            )
+            task_id = task_result[0] if task_result else None
+            
+            # Create calendar event
+            full_desc = f"Title: {title}\n\n{description}"
+            
             event_query = """
             INSERT INTO calendar_events (
-                user_id, start_time, end_time, event_desc, event_type, created_at
+                task_id, user_id, start_time, end_time, event_desc, event_type, created_at
             )
-            VALUES (%s, %s, %s, %s, 'meeting', NOW())
+            VALUES (%s, %s, %s, %s, %s, 'meeting', NOW())
             RETURNING event_id
             """
             
             event_result = execute_query(
                 event_query,
-                (self.user_id, parsed_start, parsed_end, description),
+                (task_id, self.user_id, parsed_start, parsed_end, full_desc),
                 fetch_one=True
             )
             
@@ -949,6 +883,100 @@ class MCPCalendarTools:
 
 
 
+
+    def get_calendar_events(
+        self,
+        start_date: str,
+        end_date: str,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """
+        Get calendar events within a date range.
+        
+        Args:
+            start_date: Start date (YYYY-MM-DD or ISO)
+            end_date: End date (YYYY-MM-DD or ISO)
+            limit: Max records to return
+            
+        Returns:
+            Dict containing list of events
+        """
+        try:
+            # Parse dates
+            try:
+                parsed_start = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            except ValueError:
+                from dateutil import parser
+                parsed_start = parser.parse(start_date)
+                
+            try:
+                parsed_end = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            except ValueError:
+                from dateutil import parser
+                parsed_end = parser.parse(end_date)
+            
+            # If start and end are on the same day and end time is 00:00, assume end of day
+            if parsed_start.date() == parsed_end.date() and parsed_end.hour == 0 and parsed_end.minute == 0:
+                parsed_end = parsed_end.replace(hour=23, minute=59, second=59)
+            
+            # Query database
+            query = """
+            SELECT 
+                e.event_id, 
+                COALESCE(t.title, e.event_desc, 'Untitled Event') as title,
+                e.start_time, 
+                e.end_time, 
+                ml.meeting_url,
+                e.event_type,
+                t.description as task_desc,
+                e.event_desc
+            FROM calendar_events e
+            LEFT JOIN tasks t ON e.task_id = t.task_id
+            LEFT JOIN meeting_links ml ON e.event_id = ml.event_id
+            WHERE e.user_id = %s 
+            AND e.start_time >= %s 
+            AND e.start_time <= %s
+            ORDER BY e.start_time ASC
+            LIMIT %s
+            """
+            
+            results = execute_query(
+                query, 
+                (self.user_id, parsed_start, parsed_end, limit),
+                fetch_all=True
+            )
+            
+            events = []
+            if results:
+                for row in results:
+                    # Logic to determine description
+                    # If it's a task, description is in task_desc (row[7])
+                    # If it's a meeting, description is in event_desc (row[8])
+                    description = row[6] if row[6] else row[7]
+                    
+                    events.append({
+                        'event_id': row[0],
+                        'title': row[1],
+                        'start_time': row[2].isoformat() if row[2] else None,
+                        'end_time': row[3].isoformat() if row[3] else None,
+                        'meeting_link': row[4],
+                        'type': row[5] if row[5] else ('task' if row[6] else 'event'),
+                        'description': description
+                    })
+            
+            return {
+                'success': True,
+                'count': len(events),
+                'events': events,
+                'message': f"Found {len(events)} events from {parsed_start.date()} to {parsed_end.date()}"
+            }
+            
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f"Failed to fetch events: {str(e)}"
+            }
+
 def get_tools(user_id: int) -> List[Dict[str, Any]]:
     """
     Get available MCP tools for the given user.
@@ -963,68 +991,69 @@ def get_tools(user_id: int) -> List[Dict[str, Any]]:
     
     return [
         {
+            'name': 'get_calendar_events',
+            'description': 'Get calendar events and meetings within a specified date range. Use this to show the user their schedule.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'start_date': {
+                        'type': 'string',
+                        'description': 'Start date (YYYY-MM-DD)'
+                    },
+                    'end_date': {
+                        'type': 'string',
+                        'description': 'End date (YYYY-MM-DD)'
+                    },
+                    'limit': {
+                        'type': 'integer',
+                        'description': 'Max number of events to return (default 50)'
+                    }
+                },
+                'required': ['start_date', 'end_date']
+            },
+            'function': tools_instance.get_calendar_events
+        },
+        {
             'name': 'add_task_to_calendar',
-            'description': 'Add a task to the user\'s calendar and database. Use this when the user wants to create a new task or todo item.',
+            'description': 'Add a task or event to the user\'s calendar. Use this for tasks, todos, deadlines, OR simple time-blocking.',
             'parameters': {
                 'type': 'object',
                 'properties': {
                     'title': {
                         'type': 'string',
-                        'description': 'The title or name of the task'
+                        'description': 'The title of the task or event'
                     },
                     'description': {
                         'type': 'string',
-                        'description': 'Detailed description of the task'
+                        'description': 'Description of the task/event'
                     },
                     'due_date': {
                         'type': 'string',
-                        'description': 'Due date and time for the task (e.g., "2024-12-30 17:00" or "tomorrow at 5pm")'
+                        'description': 'Start date/time (e.g., "2024-12-30 17:00")'
                     },
                     'priority': {
                         'type': 'string',
                         'enum': ['low', 'medium', 'high', 'urgent'],
-                        'description': 'Priority level of the task'
+                        'description': 'Priority level'
                     },
                     'category': {
                         'type': 'string',
-                        'description': 'Category or tag for the task (e.g., "work", "personal", "study")'
+                        'description': 'Category or tag'
+                    },
+                    'end_time': {
+                        'type': 'string',
+                        'description': 'Optional end time for events'
+                    },
+                    'meeting_link': {
+                        'type': 'string',
+                        'description': 'Optional meeting link'
                     }
                 },
                 'required': ['title']
             },
             'function': tools_instance.add_task_to_calendar
         },
-        {
-            'name': 'schedule_event',
-            'description': 'Schedule an event or meeting on the user\'s calendar. Use this for meetings, appointments, or time-blocked events.',
-            'parameters': {
-                'type': 'object',
-                'properties': {
-                    'title': {
-                        'type': 'string',
-                        'description': 'The title of the event or meeting'
-                    },
-                    'start_time': {
-                        'type': 'string',
-                        'description': 'Start time of the event (e.g., "2024-12-30 14:00" or "tomorrow at 2pm")'
-                    },
-                    'end_time': {
-                        'type': 'string',
-                        'description': 'End time of the event (optional, defaults to 1 hour after start)'
-                    },
-                    'description': {
-                        'type': 'string',
-                        'description': 'Description or agenda for the event'
-                    },
-                    'meeting_link': {
-                        'type': 'string',
-                        'description': 'Meeting link (e.g., Zoom, Google Meet URL)'
-                    }
-                },
-                'required': ['title', 'start_time']
-            },
-            'function': tools_instance.schedule_event
-        },
+
         {
             'name': 'get_collaborators',
             'description': 'Search for collaborators (friends) by name, email, or username. Only searches within the user\'s friend network.',
@@ -1185,8 +1214,7 @@ def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Di
     
     if tool_name == 'add_task_to_calendar':
         return tools_instance.add_task_to_calendar(**parameters)
-    elif tool_name == 'schedule_event':
-        return tools_instance.schedule_event(**parameters)
+
     elif tool_name == 'get_collaborators':
         return tools_instance.get_collaborators(**parameters)
     elif tool_name == 'add_collaborators_to_event':
@@ -1197,6 +1225,8 @@ def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Di
         return tools_instance.save_todo_only(**parameters)
     elif tool_name == 'schedule_meeting':
         return tools_instance.schedule_meeting(**parameters)
+    elif tool_name == 'get_calendar_events':
+        return tools_instance.get_calendar_events(**parameters)
     else:
         return {
             'success': False,

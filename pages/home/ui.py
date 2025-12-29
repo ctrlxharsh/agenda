@@ -9,16 +9,9 @@ def distinct_home_page():
         st.session_state.chat_processing = False
     
     # Main Dashboard Content
+    # Main Dashboard Content - AI Assistant
     with st.container(border=True):
-        st.title(f"Welcome, {st.session_state.user['username']}")
-        st.subheader("Projects & Tasks")
-        st.info("Tasks dashboard coming soon...")
-    
-    # AI Assistant Section
-    st.divider()
-    
-    with st.container(border=True):
-        st.subheader("🤖 AI Assistant")
+        st.title("🤖 AI Assistant")
         st.caption("Ask me anything or manage your calendar with natural language!")
         
         # Display chat messages
