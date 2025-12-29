@@ -1192,6 +1192,15 @@ class MCPCalendarTools:
                 from dateutil import parser
                 parsed_date = parser.parse(scheduled_date).date()
             
+            # Ensure duration_hours is float
+            if duration_hours:
+                try:
+                    duration_hours = float(duration_hours)
+                except (ValueError, TypeError):
+                    duration_hours = 2.0
+            else:
+                duration_hours = 2.0
+            
             # Parse start time
             parsed_start_time = None
             if start_time:
