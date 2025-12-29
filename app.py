@@ -52,6 +52,10 @@ def main():
                 st.session_state.current_page = "Calendar"
                 st.rerun()
 
+            if st.button("Today's Plan", type="primary" if st.session_state.current_page == "TodaysPlan" else "secondary", use_container_width=True):
+                st.session_state.current_page = "TodaysPlan"
+                st.rerun()
+
             if st.button("Workboard", type="primary" if st.session_state.current_page == "Workboard" else "secondary", use_container_width=True):
                 st.session_state.current_page = "Workboard"
                 st.rerun()
@@ -79,6 +83,9 @@ def main():
         elif st.session_state.current_page == "Calendar":
             from pages.calendar.ui import distinct_calendar_page
             distinct_calendar_page()
+        elif st.session_state.current_page == "TodaysPlan":
+            from pages.todays_plan.ui import distinct_todays_plan_page
+            distinct_todays_plan_page()
         elif st.session_state.current_page == "Workboard":
             from pages.todo.ui import distinct_todo_page
             distinct_todo_page()

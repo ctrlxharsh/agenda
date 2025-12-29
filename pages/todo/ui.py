@@ -6,7 +6,7 @@ def get_all_work_items(user_id):
     """Fetch all active items (tasks, todos, meetings) for the user."""
     # We fetch everything that is NOT completed
     query = """
-    SELECT task_id, title, description, priority, due_date, category, status, created_at
+    SELECT task_id, title, description, priority, due_date, category, status, created_at, start_time, end_time
     FROM tasks
     WHERE user_id = %s AND status != 'completed'
     """
@@ -68,15 +68,14 @@ def distinct_todo_page():
     # Interpreting as: Exclude very old items (> 6 months ago), preserve future.
     six_months_ago = today - timedelta(days=180)
 
-
-
     for item in items:
         # Unpack
-        # task_id, title, description, priority, due_date, category, status, created_at
+        # task_id, title, description, priority, due_date, category, status, created_at, start_time, end_time
         i_dict = {
             'id': item[0], 'title': item[1], 'description': item[2], 
             'priority': item[3], 'due_date': item[4], 'category': item[5], 
-            'status': item[6], 'created_at': item[7]
+            'status': item[6], 'created_at': item[7],
+            'start_time': item[8], 'end_time': item[9]
         }
         
         # Apply Filters
@@ -84,10 +83,17 @@ def distinct_todo_page():
         if filter_priority != "All" and i_dict['priority'].lower() != filter_priority.lower():
             continue
             
-        # 2. Category - REMOVED
-            
         # 3. Date Filter
-        item_date = i_dict['due_date'].date() if i_dict['due_date'] else (i_dict['created_at'].date() if i_dict['created_at'] else None)
+        # Fix: due_date might be date or datetime. created_at is timestamp (datetime).
+        item_date = None
+        if i_dict['due_date']:
+            item_date = i_dict['due_date']
+            if hasattr(item_date, 'date'): # Check if it's datetime
+                item_date = item_date.date()
+        elif i_dict['created_at']:
+             item_date = i_dict['created_at']
+             if hasattr(item_date, 'date'):
+                 item_date = item_date.date()
         
         if not item_date:
             # If no date, usually keep it unless precise filter is on
@@ -128,14 +134,23 @@ def distinct_todo_page():
     def get_priority_val(x):
         return priority_map.get(x['priority'].lower(), 4)
     
-    # 1. Tasks: Deadline (Due Date) -> Progress (N/A) -> Priority
-    tasks.sort(key=lambda x: (x['due_date'] or datetime.max, get_priority_val(x)))
+    # 1. Tasks: Priority -> Deadline
+    tasks.sort(key=lambda x: (get_priority_val(x), x['due_date'] or datetime.max))
     
     # 2. To-Do: Priority -> Date (Created/Due)
     todos.sort(key=lambda x: (get_priority_val(x), x['due_date'] or x['created_at'] or datetime.max))
     
-    # 3. Meetings: Upcoming Date & Time
-    meetings.sort(key=lambda x: x['due_date'] or datetime.max)
+    # 3. Meetings: Priority -> Upcoming Date & Time
+    # Note: Usually chronological is best for meetings, but user requested priority sort for ALL.
+    def get_meeting_dt(x):
+        d = x['due_date'] or datetime.max
+        if x.get('start_time'):
+            # Combine if possible, otherwise use date
+            if hasattr(d, 'date'): # it's datetime
+                 return d
+        return d
+
+    meetings.sort(key=lambda x: (get_priority_val(x), x['due_date'] or datetime.max))
     
 
     # Display Functions
@@ -148,17 +163,27 @@ def distinct_todo_page():
         due_str = ""
         if item['due_date']:
             due_str = item['due_date'].strftime('%b %d')
-            if item['status'] == 'meeting':
-                 due_str = item['due_date'].strftime('%b %d, %H:%M')
+            
+        # Enhanced Time Display for Meetings/Scheduled Tasks
+        if item.get('start_time'):
+            time_part = item['start_time'].strftime('%H:%M')
+            if item.get('end_time'):
+                time_part += f"-{item['end_time'].strftime('%H:%M')}"
+            
+            if item.get('due_date'): # Using due_date as the primary date for scheduled items
+                 item_dt = item['due_date']
+                 # Check if we need to parse date
+                 if hasattr(item_dt, 'date'): item_dt = item_dt.date()
+                 date_str = item_dt.strftime('%b %d')
+                 due_str = f"{date_str}, {time_part}"
+            else:
+                 # Fallback if only time exists (shouldn't happen for meetings usually)
+                 due_str = f"{due_str}, {time_part}" if due_str else time_part
         
         col1, col2, col3 = st.columns([0.7, 0.2, 0.1])
         with col1:
             title_text = f"{p_emoji} {item['title']}" if show_priority else item['title']
             
-            # Additional visual cues
-            if item['category']:
-                title_text += f" <span style='color:grey; font-size:0.8em'>({item['category']})</span>"
-                
             st.markdown(title_text, unsafe_allow_html=True)
             if show_desc_inline and item['description']:
                  st.caption(item['description'])
@@ -194,6 +219,10 @@ def distinct_todo_page():
         if meetings:
             with st.container(border=True):
                 for m in meetings:
-                    render_item(m, show_priority=False, show_date=True, show_desc_inline=True)
+                    render_item(m, show_priority=True, show_date=True, show_desc_inline=False)
         else:
             st.caption("No upcoming meetings.")
+
+    # Legend
+    st.markdown("---")
+    st.caption("Priority: 🔴 Urgent | 🟠 High | 🔵 Medium | ⚪ Low")

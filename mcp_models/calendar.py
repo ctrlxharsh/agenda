@@ -1169,7 +1169,7 @@ class MCPCalendarTools:
         scheduled_date: str,
         start_time: Optional[str] = None,
         end_time: Optional[str] = None,
-        duration_hours: float = 2.0
+        duration_hours: Optional[float] = 2.0
     ) -> Dict[str, Any]:
         """
         Check for scheduling conflicts on a given date/time.
@@ -1209,8 +1209,9 @@ class MCPCalendarTools:
                     parsed_end_time = datetime.strptime(end_time, '%H:%M:%S').time()
             elif parsed_start_time:
                 # Calculate end time from duration
+                duration = duration_hours if duration_hours is not None else 2.0
                 start_dt = datetime.combine(parsed_date, parsed_start_time)
-                end_dt = start_dt + timedelta(hours=duration_hours)
+                end_dt = start_dt + timedelta(hours=duration)
                 parsed_end_time = end_dt.time()
             
             # Query for tasks on the same day
@@ -1403,7 +1404,8 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
                     },
                     'duration_hours': {
                         'type': 'number',
-                        'description': 'Expected duration in hours (default: 2.0, used if end_time not provided)'
+                        'description': 'Expected duration in hours (default: 2.0, used if end_time not provided)',
+                        'default': 2.0
                     }
                 },
                 'required': ['scheduled_date']
