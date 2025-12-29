@@ -9,6 +9,10 @@ def distinct_home_page():
         st.session_state.chat_processing = False
     
     # Main Dashboard Content
+    if "user" in st.session_state:
+        st.title(f"Welcome {st.session_state.user['username']} 👋")
+        st.write("Here is your agenda and assistant panel.")
+
     # Main Dashboard Content - AI Assistant
     with st.container(border=True):
         st.title("🤖 AI Assistant")
