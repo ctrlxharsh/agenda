@@ -267,37 +267,44 @@ class MCPCalendarTools:
             
             friend_ids = user_result[0]
             
-            # Build search query based on type
-            if search_type == "email":
-                search_condition = "email ILIKE %s"
-            elif search_type == "username":
-                search_condition = "username ILIKE %s"
-            elif search_type == "name":
-                search_condition = "full_name ILIKE %s"
-            else:  # "any"
-                search_condition = "(full_name ILIKE %s OR email ILIKE %s OR username ILIKE %s)"
+            # Ensure search_type has a valid value
+            if not search_type or search_type not in ['any', 'name', 'email', 'username']:
+                search_type = 'any'
             
-            # Search within friend network
+            # Build search query and parameters based on type
+            search_param = f"%{search_query}%"
+            
             if search_type == "any":
-                search_param = f"%{search_query}%"
-                collab_query = f"""
+                # Search across all fields
+                collab_query = """
                 SELECT id, username, full_name, email 
                 FROM users 
-                WHERE id = ANY(%s) AND ({search_condition})
+                WHERE id = ANY(%s) AND (full_name ILIKE %s OR email ILIKE %s OR username ILIKE %s)
                 """
-                results = await execute_query_async(
-                    collab_query,
-                    (friend_ids, search_param, search_param, search_param),
-                    fetch_all=True
-                )
-            else:
-                search_param = f"%{search_query}%"
-                collab_query = f"""
+                query_params = (friend_ids, search_param, search_param, search_param)
+            elif search_type == "email":
+                collab_query = """
                 SELECT id, username, full_name, email 
                 FROM users 
-                WHERE id = ANY(%s) AND {search_condition}
+                WHERE id = ANY(%s) AND email ILIKE %s
                 """
-                results = await execute_query_async(collab_query, (friend_ids, search_param), fetch_all=True)
+                query_params = (friend_ids, search_param)
+            elif search_type == "username":
+                collab_query = """
+                SELECT id, username, full_name, email 
+                FROM users 
+                WHERE id = ANY(%s) AND username ILIKE %s
+                """
+                query_params = (friend_ids, search_param)
+            else:  # search_type == "name"
+                collab_query = """
+                SELECT id, username, full_name, email 
+                FROM users 
+                WHERE id = ANY(%s) AND full_name ILIKE %s
+                """
+                query_params = (friend_ids, search_param)
+            
+            results = await execute_query_async(collab_query, query_params, fetch_all=True)
             
             if not results:
                 return {
@@ -324,9 +331,13 @@ class MCPCalendarTools:
             }
             
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"ERROR in get_collaborators: {error_details}")  # Log to console
             return {
                 'success': False,
-                'error': f"Failed to search collaborators: {str(e)}"
+                'error': f"Failed to search collaborators: {str(e)}",
+                'error_details': error_details  # Include full traceback for debugging
             }
     
     async def add_collaborators_to_event(
@@ -1076,7 +1087,8 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
                     'search_type': {
                         'type': 'string',
                         'enum': ['any', 'name', 'email', 'username'],
-                        'description': 'Type of search to perform (default: any)'
+                        'description': 'Type of search to perform (default: any)',
+                        'default': 'any'
                     }
                 },
                 'required': ['search_query']
