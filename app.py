@@ -32,6 +32,7 @@ def main():
             st.session_state.current_page = "Dashboard"
 
         with st.sidebar:
+            st.markdown(f"### Welcome {st.session_state.user['username']} 👋")
             st.title("Agenda")
             
             # Navigation Buttons

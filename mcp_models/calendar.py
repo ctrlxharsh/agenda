@@ -1,8 +1,8 @@
 """
-MCP Server for Calendar Management Tools
+MCP Calendar Tools
 
-This module provides an MCP (Model Context Protocol) server that exposes
-calendar management tools for the LangGraph agent to use.
+This module provides MCP (Model Context Protocol) tools for calendar management.
+Includes Google Calendar integration, task management, meeting scheduling, and collaborator handling.
 """
 
 from typing import Any, Dict, List, Optional
@@ -233,9 +233,6 @@ class MCPCalendarTools:
                 'success': False,
                 'error': f"Failed to add task: {str(e)}"
             }
-    
-    #  it is a task 
-
     
     def get_collaborators(
         self,
@@ -882,8 +879,6 @@ class MCPCalendarTools:
             }
 
 
-
-
     def get_calendar_events(
         self,
         start_date: str,
@@ -977,9 +972,10 @@ class MCPCalendarTools:
                 'error': f"Failed to fetch events: {str(e)}"
             }
 
-def get_tools(user_id: int) -> List[Dict[str, Any]]:
+
+def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
     """
-    Get available MCP tools for the given user.
+    Get available calendar MCP tools for the given user.
     
     Args:
         user_id: User ID to create tools for
@@ -1198,9 +1194,9 @@ def get_tools(user_id: int) -> List[Dict[str, Any]]:
     ]
 
 
-def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+def execute_calendar_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Execute an MCP tool by name.
+    Execute a calendar MCP tool by name.
     
     Args:
         user_id: User ID executing the tool
@@ -1214,7 +1210,6 @@ def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Di
     
     if tool_name == 'add_task_to_calendar':
         return tools_instance.add_task_to_calendar(**parameters)
-
     elif tool_name == 'get_collaborators':
         return tools_instance.get_collaborators(**parameters)
     elif tool_name == 'add_collaborators_to_event':
@@ -1230,5 +1225,16 @@ def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Di
     else:
         return {
             'success': False,
-            'error': f"Unknown tool: {tool_name}"
+            'error': f"Unknown calendar tool: {tool_name}"
         }
+
+
+# Backward-compatible aliases
+def get_tools(user_id: int) -> List[Dict[str, Any]]:
+    """Backward-compatible alias for get_calendar_tools."""
+    return get_calendar_tools(user_id)
+
+
+def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+    """Backward-compatible alias for execute_calendar_tool."""
+    return execute_calendar_tool(user_id, tool_name, parameters)
