@@ -8,7 +8,9 @@ manage calendar tasks and events.
 
 import logging
 import os
-from typing import Any, Dict, List, Optional
+import asyncio
+import inspect
+from typing import Any, Dict, List, Optional, AsyncGenerator
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
@@ -24,9 +26,9 @@ logger = logging.getLogger(__name__)
 
 
 # Condensed, production-ready system prompt
-SYSTEM_PROMPT = """You are a helpful AI assistant. You manage the user's calendar, tasks, and meetings using Google Calendar.
+SYSTEM_PROMPT = """You are a helpful AI assistant. You manage the user's calendar, tasks, meetings, and GitHub repositories.
 
-**Tools:**
+**Calendar Tools:**
 - save_todo_only: Save task to todo list (no calendar)
 - add_task_to_calendar: Add task/event to calendar
 - schedule_meeting: Meeting with collaborators and Google Meet
@@ -35,16 +37,34 @@ SYSTEM_PROMPT = """You are a helpful AI assistant. You manage the user's calenda
 - generate_meeting_link: Create/attach Google Meet link
 - get_calendar_events: List events for a date range
 
+**GitHub Tools (if connected):**
+- github_list_repositories: List user's repos
+- github_get_repository_details: Get repo info
+- github_create_repository_with_code: Create repo with YOUR CUSTOM CODE (games, apps, etc)
+- github_create_empty_repository: Create empty repo with README, .gitignore, license. Returns clone command.
+- github_list_issues / github_create_issue / github_close_issue: Manage issues
+- github_list_pull_requests / github_comment_on_pull_request: Manage PRs
+- github_read_notifications / github_mark_notification_as_read: Notifications
+
 **Rules:**
-1. Only use listed tools. Ask for missing info instead of assuming.
-2. Never call multiple creation tools for the same request.
-3. If asked something you can't do, say so clearly.
+1. Only use available tools.
+2. **Auto-fill & Confirm:** If a tool requires details the user didn't provide (like time, duration, or code content), PROPOSE reasonable defaults to the user. If they confirm, use those defaults. Do not ask for every single detail if you can infer or suggest it.
+3. Never call multiple creation tools for the same request.
 4. For todos: Ask if user wants calendar or just todo list.
 5. For meetings: Gather title, time, attendees before scheduling.
-6. Default: tasks → tomorrow 10 AM; events → 1 hour; priority → medium.
-7. Timezone: Asia/Kolkata.
+6. Timezone: Asia/Kolkata.
 
-Be conversational and friendly!"""
+**GitHub Project Creation - CRITICAL:**
+6. For SPECIFIC projects (game, app, portfolio, or simple websites): Use `github_create_repository_with_code`.
+   - You MUST provide `name` (not repo_name).
+   - You MUST provide `html_content` (full HTML code).
+   - You CAN provide `css_content` and `js_content`.
+   - Do NOT invent parameters like "stack", "single_page", "enable_pages".
+8. For "new python project", "init a node project", etc: Use `github_create_empty_repository` with correct `project_type`.
+9. Keep responses SHORT - just show URLs and clone command, don't output code.
+10. GitHub Pages will be enabled automatically for web projects.
+
+Be conversational, friendly, and CONCISE!"""
 
 
 class ChatbotAgent:
@@ -82,9 +102,6 @@ class ChatbotAgent:
             prompt=SYSTEM_PROMPT
         )
         
-        # Save graph visualization for debugging
-        self._save_graph_debug()
-        
         logger.info("LangGraph agent created successfully")
     
     def _create_langchain_tools(self) -> List[StructuredTool]:
@@ -94,6 +111,8 @@ class ChatbotAgent:
         Returns:
             List of LangChain StructuredTool objects
         """
+        from pydantic import BaseModel, create_model, Field
+        
         mcp_tools = mcp_models.get_tools(self.user_id)
         langchain_tools = []
         
@@ -101,63 +120,75 @@ class ChatbotAgent:
             tool_func = mcp_tool['function']
             tool_name = mcp_tool['name']
             tool_desc = mcp_tool['description']
+            tool_params = mcp_tool.get('parameters', {})
             
-            structured_tool = StructuredTool.from_function(
-                func=tool_func,
-                name=tool_name,
-                description=tool_desc
-            )
+            # Check if the function is a coroutine function
+            if inspect.iscoroutinefunction(tool_func):
+                # For async tools with parameters schema, create args_schema
+                if tool_params and 'properties' in tool_params:
+                    # Build pydantic model from JSON schema
+                    fields = {}
+                    for param_name, param_def in tool_params['properties'].items():
+                        param_type = str  # default
+                        param_default = ...  # required by default
+                        
+                        # Map JSON types to Python types
+                        if param_def.get('type') == 'integer':
+                            param_type = int
+                        elif param_def.get('type') == 'boolean':
+                            param_type = bool
+                        elif param_def.get('type') == 'array':
+                            param_type = list
+                        elif param_def.get('type') == 'object':
+                            param_type = dict
+                        
+                        # Check if parameter is required
+                        if param_name not in tool_params.get('required', []):
+                            param_default = param_def.get('default', None)
+                        
+                        fields[param_name] = (param_type, param_default)
+                    
+                    # Create pydantic model
+                    ArgsSchema = create_model(f"{tool_name}_args", **fields)
+                    
+                    structured_tool = StructuredTool(
+                        name=tool_name,
+                        description=tool_desc,
+                        coroutine=tool_func,
+                        args_schema=ArgsSchema
+                    )
+                else:
+                    # No schema, use from_function
+                    structured_tool = StructuredTool.from_function(
+                        func=lambda: None,
+                        coroutine=tool_func,
+                        name=tool_name,
+                        description=tool_desc
+                    )
+            else:
+                # Standard sync tool
+                structured_tool = StructuredTool.from_function(
+                    func=tool_func,
+                    name=tool_name,
+                    description=tool_desc
+                )
+            
             langchain_tools.append(structured_tool)
         
         return langchain_tools
     
-    def _save_graph_debug(self):
+    async def chat_stream(self, user_message: str, chat_history: Optional[List[Dict]] = None) -> AsyncGenerator[Dict[str, Any], None]:
         """
-        Save graph visualization for debugging.
-        Creates a PNG diagram of the agent graph.
-        """
-        try:
-            # Get the graph as PNG
-            mermaid_png = self.agent.get_graph().draw_mermaid_png()
-            
-            # Save to debug directory
-            debug_dir = os.path.join(os.path.dirname(__file__), "debug")
-            os.makedirs(debug_dir, exist_ok=True)
-            
-            graph_path = os.path.join(debug_dir, "langgraph_agent.png")
-            with open(graph_path, "wb") as f:
-                f.write(mermaid_png)
-            
-            logger.info(f"Graph visualization saved to: {graph_path}")
-            
-        except Exception as e:
-            logger.warning(f"Could not save graph visualization: {e}")
-    
-    def get_graph_mermaid(self) -> str:
-        """
-        Get the graph as a Mermaid diagram string.
-        
-        Returns:
-            Mermaid diagram string
-        """
-        try:
-            return self.agent.get_graph().draw_mermaid()
-        except Exception as e:
-            logger.warning(f"Could not generate Mermaid diagram: {e}")
-            return ""
-    
-    def chat(self, user_message: str, chat_history: Optional[List[Dict]] = None) -> str:
-        """
-        Process a user message and return the response.
+        Process a user message and yield events from the agent.
         
         Args:
             user_message: The user's message
             chat_history: Previous chat messages (optional)
             
-        Returns:
-            The assistant's response
+        Yields:
+            Dictionary containing event type and data
         """
-        logger.info(f"Chat: Received - {user_message[:50]}...")
+        logger.info(f"Chat Stream: Received - {user_message[:50]}...")
         
         # Convert chat history to LangChain messages
         messages: List[BaseMessage] = []
@@ -173,24 +204,71 @@ class ChatbotAgent:
         messages.append(HumanMessage(content=user_message))
         
         try:
-            # Run the agent
-            result = self.agent.invoke({"messages": messages})
-            
-            # Extract the final response
-            final_messages = result["messages"]
-            
-            # Find the last AI message
-            for msg in reversed(final_messages):
-                if isinstance(msg, AIMessage) and msg.content:
-                    logger.info("Chat: Response generated successfully")
-                    return msg.content
-            
-            logger.warning("Chat: No AI message found")
-            return "I apologize, but I couldn't generate a response."
-            
+            # Stream events from the agent
+            async for event in self.agent.astream_events({"messages": messages}, version="v1"):
+                kind = event["event"]
+                
+                # Yield token events for streaming the response
+                if kind == "on_chat_model_stream":
+                    content = event["data"]["chunk"].content
+                    if content:
+                        yield {
+                            "type": "token",
+                            "content": content
+                        }
+                
+                # Yield tool start events
+                elif kind == "on_tool_start":
+                    yield {
+                        "type": "tool_start",
+                        "tool": event["name"],
+                        "input": event["data"].get("input")
+                    }
+                
+                # Yield tool end events
+                elif kind == "on_tool_end":
+                    yield {
+                        "type": "tool_end",
+                        "tool": event["name"],
+                        "output": event["data"].get("output")
+                    }
+                    
         except Exception as e:
-            logger.error(f"Chat: Agent failed - {e}")
-            return "I apologize, but I encountered an error processing your request."
+            logger.error(f"Chat Stream: Agent failed - {e}")
+            yield {
+                "type": "error",
+                "content": "I apologize, but I encountered an error processing your request."
+            }
+
+    def chat(self, user_message: str, chat_history: Optional[List[Dict]] = None) -> str:
+        """
+        Process a user message and return the response (Synchronous wrapper).
+        DEPRECATED: Use chat_stream for async/streaming support.
+        
+        Args:
+            user_message: The user's message
+            chat_history: Previous chat messages (optional)
+            
+        Returns:
+            The assistant's response
+        """
+        # This is a legacy wrapper. Ideally, the UI should use chat_stream.
+        # Since we can't easily run async code here without an event loop,
+        # we'll try to use asyncio.run if no loop is running.
+        
+        async def run_chat():
+            full_response = ""
+            async for event in self.chat_stream(user_message, chat_history):
+                if event["type"] == "token":
+                    full_response += event["content"]
+            return full_response
+
+        try:
+            return asyncio.run(run_chat())
+        except RuntimeError:
+            # If loop is already running (e.g. in Streamlit), we can't use asyncio.run
+            # This method shouldn't be used in async contexts anyway.
+            return "Error: Synchronous chat called in async context. Use chat_stream."
 
 
 def create_chatbot(user_id: int, username: str) -> ChatbotAgent:

@@ -49,7 +49,7 @@ def get_linkedin_tools(user_id: int) -> List[Dict[str, Any]]:
     return []
 
 
-def execute_linkedin_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_linkedin_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute a LinkedIn MCP tool by name.
     

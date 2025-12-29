@@ -4,7 +4,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
-REDIRECT_URI = "http://localhost:8501" # Standard Streamlit local port
+REDIRECT_URI = "http://localhost:8501"  # Streamlit port
 
 # In a real app, you would load this from a file or env vars.
 # For now, we unfortunately MUST have a client_secret.json to behave like a web server flow.

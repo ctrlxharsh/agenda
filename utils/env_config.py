@@ -46,6 +46,26 @@ class EnvConfig:
             bool: True if in development mode
         """
         return os.getenv("ENVIRONMENT", "development").lower() == "development"
+    
+    @staticmethod
+    def get_github_client_id() -> Optional[str]:
+        """
+        Get GitHub OAuth Client ID from environment variables.
+        
+        Returns:
+            Optional[str]: GitHub Client ID if set, None otherwise
+        """
+        return os.getenv("GITHUB_CLIENT_ID")
+    
+    @staticmethod
+    def get_github_client_secret() -> Optional[str]:
+        """
+        Get GitHub OAuth Client Secret from environment variables.
+        
+        Returns:
+            Optional[str]: GitHub Client Secret if set, None otherwise
+        """
+        return os.getenv("GITHUB_CLIENT_SECRET")
 
 
 # Convenience functions for direct access

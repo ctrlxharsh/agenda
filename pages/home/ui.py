@@ -1,4 +1,5 @@
 import streamlit as st
+import asyncio
 from pages.home.chatbot_logic import create_chatbot
 
 def distinct_home_page():
@@ -54,29 +55,73 @@ def distinct_home_page():
         
         # Get assistant response
         with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                try:
-                    # Create chatbot instance
-                    chatbot = create_chatbot(
-                        user_id=st.session_state.user['id'],
-                        username=st.session_state.user['username']
-                    )
-                    
-                    # Get response
-                    response = chatbot.chat(
+            # Create chatbot instance
+            chatbot = create_chatbot(
+                user_id=st.session_state.user['id'],
+                username=st.session_state.user['username']
+            )
+            
+            # Async function to handle streaming
+            async def process_chat():
+                response_placeholder = st.empty()
+                full_response = ""
+                status_placeholder = st.empty()
+                
+                # We'll use a status container for tool execution
+                with status_placeholder.status("Thinking...", expanded=True) as status:
+                    async for event in chatbot.chat_stream(
                         user_message=prompt,
                         chat_history=st.session_state.chat_messages[:-1]
-                    )
+                    ):
+                        if event["type"] == "token":
+                            full_response += event["content"]
+                            response_placeholder.markdown(full_response + "▌")
+                        
+                        elif event["type"] == "tool_start":
+                            tool_name = event['tool']
+                            status.update(label=f"🛠️ Executing {tool_name}...", state="running", expanded=True)
+                            status.write(f"**{tool_name}**: Executing...")
+                            # Safe JSON display
+                            input_data = event['input']
+                            if isinstance(input_data, (dict, list)):
+                                status.json(input_data)
+                            else:
+                                status.write(input_data)
+                        
+                        elif event["type"] == "tool_end":
+                            tool_name = event['tool']
+                            status.update(label="Thinking...", state="running")
+                            status.write(f"✅ **{tool_name}**: Done")
+                            # Safe JSON display
+                            output_data = event['output']
+                            if isinstance(output_data, (dict, list)):
+                                status.json(output_data)
+                            else:
+                                status.write(output_data)
+                        
+                        elif event["type"] == "error":
+                            st.error(event["content"])
+                            full_response = event["content"]
                     
-                    st.markdown(response)
-                    
-                    # Add assistant response to chat history
-                    st.session_state.chat_messages.append({"role": "assistant", "content": response})
-                    
-                except Exception as e:
-                    error_message = f"I apologize, but I encountered an error: {str(e)}"
-                    st.error(error_message)
-                    st.session_state.chat_messages.append({"role": "assistant", "content": error_message})
+                    status.update(label="Finished", state="complete", expanded=False)
+                
+                # Clear the status placeholder if you want it to disappear, or keep it collapsed
+                # status_placeholder.empty() 
+                
+                response_placeholder.markdown(full_response)
+                return full_response
+
+            try:
+                # Run the async process
+                response = asyncio.run(process_chat())
+                
+                # Add assistant response to chat history
+                st.session_state.chat_messages.append({"role": "assistant", "content": response})
+                
+            except Exception as e:
+                error_message = f"I apologize, but I encountered an error: {str(e)}"
+                st.error(error_message)
+                st.session_state.chat_messages.append({"role": "assistant", "content": error_message})
         
         # Reset processing state
         st.session_state.chat_processing = False

@@ -7,10 +7,11 @@ Includes Google Calendar integration, task management, meeting scheduling, and c
 
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
-from utils.db import execute_query
+from utils.db import execute_query, execute_query_async
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 import json
+import asyncio
 
 
 class MCPCalendarTools:
@@ -25,7 +26,7 @@ class MCPCalendarTools:
         """
         self.user_id = user_id
     
-    def get_google_credentials(self) -> Optional[Credentials]:
+    async def get_google_credentials(self) -> Optional[Credentials]:
         """
         Retrieve Google Calendar credentials for the user.
         
@@ -38,7 +39,7 @@ class MCPCalendarTools:
         FROM user_google_accounts 
         WHERE user_id = %s
         """
-        result = execute_query(query, (self.user_id,), fetch_one=True)
+        result = await execute_query_async(query, (self.user_id,), fetch_one=True)
         
         if not result:
             return None
@@ -54,7 +55,7 @@ class MCPCalendarTools:
         
         return Credentials(**creds_dict)
     
-    def add_task_to_calendar(
+    async def add_task_to_calendar(
         self,
         title: str,
         description: str = "",
@@ -104,7 +105,7 @@ class MCPCalendarTools:
             RETURNING task_id
             """
             
-            task_result = execute_query(
+            task_result = await execute_query_async(
                 task_query,
                 (self.user_id, title, description, 'task', priority, category, parsed_date),
                 fetch_one=True
@@ -144,7 +145,7 @@ class MCPCalendarTools:
             RETURNING event_id
             """
             
-            event_result = execute_query(
+            event_result = await execute_query_async(
                 event_query,
                 (task_id, self.user_id, event_start, event_end, description),
                 fetch_one=True
@@ -160,41 +161,44 @@ class MCPCalendarTools:
                 """
                 # Use link as code if no slash, else extract last part
                 code = meeting_link.split('/')[-1] if '/' in meeting_link else meeting_link
-                execute_query(link_query, (event_id, meeting_link, code))
+                await execute_query_async(link_query, (event_id, meeting_link, code))
             
             # Try to sync with Google Calendar
             google_event_id = None
             google_sync_message = ""
-            creds = self.get_google_credentials()
+            creds = await self.get_google_credentials()
             
             if not creds:
                 # User hasn't authorized Google Calendar
                 google_sync_message = "\n\n⚠️ **Google Calendar Not Connected**: To sync this task to your Google Calendar, please go to the Calendar tab and authorize your Google account first."
             else:
                 try:
-                    service = build('calendar', 'v3', credentials=creds)
-                    
-                    event_body = {
-                        'summary': f"📋 {title}",
-                        'description': f"{description}\n\nPriority: {priority.upper()}\nCategory: {category}",
-                        'start': {
-                            'dateTime': event_start.isoformat(),
-                            'timeZone': 'Asia/Kolkata',
-                        },
-                        'end': {
-                            'dateTime': event_end.isoformat(),
-                            'timeZone': 'Asia/Kolkata',
-                        },
-                        'colorId': '9' if priority == 'high' or priority == 'urgent' else '1',
-                    }
-                    
-                    if meeting_link:
-                        event_body['location'] = meeting_link
-                    
-                    google_event = service.events().insert(
-                        calendarId='primary',
-                        body=event_body
-                    ).execute()
+                    def _sync_google():
+                        service = build('calendar', 'v3', credentials=creds)
+                        
+                        event_body = {
+                            'summary': f"📋 {title}",
+                            'description': f"{description}\n\nPriority: {priority.upper()}\nCategory: {category}",
+                            'start': {
+                                'dateTime': event_start.isoformat(),
+                                'timeZone': 'Asia/Kolkata',
+                            },
+                            'end': {
+                                'dateTime': event_end.isoformat(),
+                                'timeZone': 'Asia/Kolkata',
+                            },
+                            'colorId': '9' if priority == 'high' or priority == 'urgent' else '1',
+                        }
+                        
+                        if meeting_link:
+                            event_body['location'] = meeting_link
+                        
+                        return service.events().insert(
+                            calendarId='primary',
+                            body=event_body
+                        ).execute()
+
+                    google_event = await asyncio.to_thread(_sync_google)
                     
                     google_event_id = google_event.get('id')
                     
@@ -205,7 +209,7 @@ class MCPCalendarTools:
                         SET google_event_ref = %s 
                         WHERE event_id = %s
                         """
-                        execute_query(update_query, (google_event_id, event_id))
+                        await execute_query_async(update_query, (google_event_id, event_id))
                         google_sync_message = "\n✅ **Synced to Google Calendar!**"
                 
                 except Exception as e:
@@ -234,7 +238,7 @@ class MCPCalendarTools:
                 'error': f"Failed to add task: {str(e)}"
             }
     
-    def get_collaborators(
+    async def get_collaborators(
         self,
         search_query: str,
         search_type: str = "any"
@@ -252,7 +256,7 @@ class MCPCalendarTools:
         try:
             # Get user's friend network
             user_query = "SELECT collaborator_ids FROM users WHERE id = %s"
-            user_result = execute_query(user_query, (self.user_id,), fetch_one=True)
+            user_result = await execute_query_async(user_query, (self.user_id,), fetch_one=True)
             
             if not user_result or not user_result[0]:
                 return {
@@ -281,7 +285,7 @@ class MCPCalendarTools:
                 FROM users 
                 WHERE id = ANY(%s) AND ({search_condition})
                 """
-                results = execute_query(
+                results = await execute_query_async(
                     collab_query,
                     (friend_ids, search_param, search_param, search_param),
                     fetch_all=True
@@ -293,7 +297,7 @@ class MCPCalendarTools:
                 FROM users 
                 WHERE id = ANY(%s) AND {search_condition}
                 """
-                results = execute_query(collab_query, (friend_ids, search_param), fetch_all=True)
+                results = await execute_query_async(collab_query, (friend_ids, search_param), fetch_all=True)
             
             if not results:
                 return {
@@ -325,7 +329,7 @@ class MCPCalendarTools:
                 'error': f"Failed to search collaborators: {str(e)}"
             }
     
-    def add_collaborators_to_event(
+    async def add_collaborators_to_event(
         self,
         event_id: int,
         collaborator_ids: Optional[List[int]] = None,
@@ -353,7 +357,7 @@ class MCPCalendarTools:
                     SELECT collab_id FROM event_collaborators 
                     WHERE event_id = %s AND user_id = %s
                     """
-                    existing = execute_query(check_query, (event_id, collab_id), fetch_one=True)
+                    existing = await execute_query_async(check_query, (event_id, collab_id), fetch_one=True)
                     
                     if existing:
                         continue  # Skip if already added
@@ -364,12 +368,12 @@ class MCPCalendarTools:
                     VALUES (%s, %s)
                     RETURNING collab_id
                     """
-                    result = execute_query(insert_query, (event_id, collab_id), fetch_one=True)
+                    result = await execute_query_async(insert_query, (event_id, collab_id), fetch_one=True)
                     
                     if result:
                         # Get collaborator info
                         user_query = "SELECT email, full_name FROM users WHERE id = %s"
-                        user_info = execute_query(user_query, (collab_id,), fetch_one=True)
+                        user_info = await execute_query_async(user_query, (collab_id,), fetch_one=True)
                         
                         if user_info:
                             added_collaborators.append({
@@ -384,7 +388,7 @@ class MCPCalendarTools:
                 for email in collaborator_emails:
                     # Check if this email belongs to a user in the system
                     user_query = "SELECT id, full_name FROM users WHERE email = %s"
-                    user_info = execute_query(user_query, (email,), fetch_one=True)
+                    user_info = await execute_query_async(user_query, (email,), fetch_one=True)
                     
                     if user_info:
                         # User exists in system, add to event_collaborators
@@ -396,14 +400,14 @@ class MCPCalendarTools:
                         SELECT collab_id FROM event_collaborators 
                         WHERE event_id = %s AND user_id = %s
                         """
-                        existing = execute_query(check_query, (event_id, user_id), fetch_one=True)
+                        existing = await execute_query_async(check_query, (event_id, user_id), fetch_one=True)
                         
                         if not existing:
                             insert_query = """
                             INSERT INTO event_collaborators (event_id, user_id)
                             VALUES (%s, %s)
                             """
-                            execute_query(insert_query, (event_id, user_id))
+                            await execute_query_async(insert_query, (event_id, user_id))
                             
                             added_collaborators.append({
                                 'id': user_id,
@@ -423,37 +427,40 @@ class MCPCalendarTools:
             
             # Update Google Calendar event with attendees
             event_query = "SELECT google_event_ref FROM calendar_events WHERE event_id = %s"
-            event_result = execute_query(event_query, (event_id,), fetch_one=True)
+            event_result = await execute_query_async(event_query, (event_id,), fetch_one=True)
             
             google_synced = False
             if event_result and event_result[0]:
                 google_event_id = event_result[0]
-                creds = self.get_google_credentials()
+                creds = await self.get_google_credentials()
                 
                 if creds:
                     try:
-                        service = build('calendar', 'v3', credentials=creds)
-                        
-                        # Get current event
-                        event = service.events().get(
-                            calendarId='primary',
-                            eventId=google_event_id
-                        ).execute()
-                        
-                        # Add attendees (both internal and external)
-                        attendees = event.get('attendees', [])
-                        for collab in added_collaborators:
-                            attendees.append({'email': collab['email']})
-                        
-                        event['attendees'] = attendees
-                        
-                        # Update event
-                        service.events().update(
-                            calendarId='primary',
-                            eventId=google_event_id,
-                            body=event,
-                            sendUpdates='all'  # Send email invitations
-                        ).execute()
+                        def _sync_attendees():
+                            service = build('calendar', 'v3', credentials=creds)
+                            
+                            # Get current event
+                            event = service.events().get(
+                                calendarId='primary',
+                                eventId=google_event_id
+                            ).execute()
+                            
+                            # Add attendees (both internal and external)
+                            attendees = event.get('attendees', [])
+                            for collab in added_collaborators:
+                                attendees.append({'email': collab['email']})
+                            
+                            event['attendees'] = attendees
+                            
+                            # Update event
+                            service.events().update(
+                                calendarId='primary',
+                                eventId=google_event_id,
+                                body=event,
+                                sendUpdates='all'  # Send email invitations
+                            ).execute()
+
+                        await asyncio.to_thread(_sync_attendees)
                         
                         google_synced = True
                     except Exception as e:
@@ -479,7 +486,7 @@ class MCPCalendarTools:
                 'error': f"Failed to add collaborators: {str(e)}"
             }
     
-    def generate_meeting_link(
+    async def generate_meeting_link(
         self,
         event_id: int,
         existing_code: Optional[str] = None
@@ -514,7 +521,7 @@ class MCPCalendarTools:
                 SET meeting_code = EXCLUDED.meeting_code, meeting_url = EXCLUDED.meeting_url
                 RETURNING link_id
                 """
-                execute_query(insert_query, (event_id, meeting_code, meeting_url))
+                await execute_query_async(insert_query, (event_id, meeting_code, meeting_url))
                 
                 return {
                     'success': True,
@@ -525,7 +532,7 @@ class MCPCalendarTools:
                 }
             
             # Auto-generate Google Meet link via Calendar API
-            creds = self.get_google_credentials()
+            creds = await self.get_google_credentials()
             
             if not creds:
                 return {
@@ -534,11 +541,9 @@ class MCPCalendarTools:
                 }
             
             try:
-                service = build('calendar', 'v3', credentials=creds)
-                
                 # Get the calendar event
                 event_query = "SELECT google_event_ref, start_time, end_time, event_desc FROM calendar_events WHERE event_id = %s"
-                event_result = execute_query(event_query, (event_id,), fetch_one=True)
+                event_result = await execute_query_async(event_query, (event_id,), fetch_one=True)
                 
                 if not event_result or not event_result[0]:
                     return {
@@ -548,27 +553,32 @@ class MCPCalendarTools:
                 
                 google_event_id = event_result[0]
                 
-                # Get current event from Google Calendar
-                event = service.events().get(
-                    calendarId='primary',
-                    eventId=google_event_id
-                ).execute()
-                
-                # Add conferenceData to create Google Meet link
-                event['conferenceData'] = {
-                    'createRequest': {
-                        'requestId': f"meet-{event_id}-{datetime.now().timestamp()}",
-                        'conferenceSolutionKey': {'type': 'hangoutsMeet'}
+                def _generate_meet_link():
+                    service = build('calendar', 'v3', credentials=creds)
+                    
+                    # Get current event from Google Calendar
+                    event = service.events().get(
+                        calendarId='primary',
+                        eventId=google_event_id
+                    ).execute()
+                    
+                    # Add conferenceData to create Google Meet link
+                    event['conferenceData'] = {
+                        'createRequest': {
+                            'requestId': f"meet-{event_id}-{datetime.now().timestamp()}",
+                            'conferenceSolutionKey': {'type': 'hangoutsMeet'}
+                        }
                     }
-                }
-                
-                # Update event with conference data
-                updated_event = service.events().update(
-                    calendarId='primary',
-                    eventId=google_event_id,
-                    body=event,
-                    conferenceDataVersion=1
-                ).execute()
+                    
+                    # Update event with conference data
+                    return service.events().update(
+                        calendarId='primary',
+                        eventId=google_event_id,
+                        body=event,
+                        conferenceDataVersion=1
+                    ).execute()
+
+                updated_event = await asyncio.to_thread(_generate_meet_link)
                 
                 # Extract meeting link
                 conference_data = updated_event.get('conferenceData', {})
@@ -597,7 +607,7 @@ class MCPCalendarTools:
                 SET meeting_code = EXCLUDED.meeting_code, meeting_url = EXCLUDED.meeting_url
                 RETURNING link_id
                 """
-                execute_query(insert_query, (event_id, meeting_code, meeting_url))
+                await execute_query_async(insert_query, (event_id, meeting_code, meeting_url))
                 
                 return {
                     'success': True,
@@ -619,7 +629,7 @@ class MCPCalendarTools:
                 'error': f"Failed to generate meeting link: {str(e)}"
             }
     
-    def save_todo_only(
+    async def save_todo_only(
         self,
         title: str,
         description: str = "",
@@ -660,7 +670,7 @@ class MCPCalendarTools:
             RETURNING task_id
             """
             
-            task_result = execute_query(
+            task_result = await execute_query_async(
                 task_query,
                 (self.user_id, title, description, 'todo', priority, category, parsed_date),
                 fetch_one=True
@@ -688,7 +698,7 @@ class MCPCalendarTools:
                 'error': f"Failed to save task: {str(e)}"
             }
     
-    def schedule_meeting(
+    async def schedule_meeting(
         self,
         title: str,
         start_time: str,
@@ -744,7 +754,7 @@ class MCPCalendarTools:
             RETURNING task_id
             """
             
-            task_result = execute_query(
+            task_result = await execute_query_async(
                 task_query,
                 (self.user_id, title, description, parsed_start),
                 fetch_one=True
@@ -762,7 +772,7 @@ class MCPCalendarTools:
             RETURNING event_id
             """
             
-            event_result = execute_query(
+            event_result = await execute_query_async(
                 event_query,
                 (task_id, self.user_id, parsed_start, parsed_end, full_desc),
                 fetch_one=True
@@ -779,39 +789,42 @@ class MCPCalendarTools:
             # Sync to Google Calendar
             google_event_id = None
             google_sync_message = ""
-            creds = self.get_google_credentials()
+            creds = await self.get_google_credentials()
             
             if creds:
                 try:
-                    service = build('calendar', 'v3', credentials=creds)
-                    
-                    event_body = {
-                        'summary': f"🤝 {title}",
-                        'description': description,
-                        'start': {
-                            'dateTime': parsed_start.isoformat(),
-                            'timeZone': 'Asia/Kolkata',
-                        },
-                        'end': {
-                            'dateTime': parsed_end.isoformat(),
-                            'timeZone': 'Asia/Kolkata',
-                        },
-                    }
-                    
-                    # Add conference data if auto-generating
-                    if auto_generate_link and not meeting_code:
-                        event_body['conferenceData'] = {
-                            'createRequest': {
-                                'requestId': f"meet-{event_id}-{datetime.now().timestamp()}",
-                                'conferenceSolutionKey': {'type': 'hangoutsMeet'}
-                            }
+                    def _sync_meeting():
+                        service = build('calendar', 'v3', credentials=creds)
+                        
+                        event_body = {
+                            'summary': f"🤝 {title}",
+                            'description': description,
+                            'start': {
+                                'dateTime': parsed_start.isoformat(),
+                                'timeZone': 'Asia/Kolkata',
+                            },
+                            'end': {
+                                'dateTime': parsed_end.isoformat(),
+                                'timeZone': 'Asia/Kolkata',
+                            },
                         }
-                    
-                    google_event = service.events().insert(
-                        calendarId='primary',
-                        body=event_body,
-                        conferenceDataVersion=1 if auto_generate_link else 0
-                    ).execute()
+                        
+                        # Add conference data if auto-generating
+                        if auto_generate_link and not meeting_code:
+                            event_body['conferenceData'] = {
+                                'createRequest': {
+                                    'requestId': f"meet-{event_id}-{datetime.now().timestamp()}",
+                                    'conferenceSolutionKey': {'type': 'hangoutsMeet'}
+                                }
+                            }
+                        
+                        return service.events().insert(
+                            calendarId='primary',
+                            body=event_body,
+                            conferenceDataVersion=1 if auto_generate_link else 0
+                        ).execute()
+
+                    google_event = await asyncio.to_thread(_sync_meeting)
                     
                     google_event_id = google_event.get('id')
                     
@@ -822,7 +835,7 @@ class MCPCalendarTools:
                         SET google_event_ref = %s, is_calendar_synced = TRUE
                         WHERE event_id = %s
                         """
-                        execute_query(update_query, (google_event_id, event_id))
+                        await execute_query_async(update_query, (google_event_id, event_id))
                         google_sync_message = "\n✅ Synced to Google Calendar!"
                     
                     # Extract auto-generated meeting link
@@ -840,7 +853,7 @@ class MCPCalendarTools:
                                 INSERT INTO meeting_links (event_id, platform, meeting_code, meeting_url)
                                 VALUES (%s, 'google_meet', %s, %s)
                                 """
-                                execute_query(link_query, (event_id, meeting_code_extracted, meeting_url))
+                                await execute_query_async(link_query, (event_id, meeting_code_extracted, meeting_url))
                                 google_sync_message += f"\n🔗 Google Meet: {meeting_url}"
                                 break
                 
@@ -850,7 +863,7 @@ class MCPCalendarTools:
             # Add collaborators if provided
             collab_message = ""
             if collaborator_ids or collaborator_emails:
-                collab_result = self.add_collaborators_to_event(
+                collab_result = await self.add_collaborators_to_event(
                     event_id, 
                     collaborator_ids=collaborator_ids,
                     collaborator_emails=collaborator_emails
@@ -861,7 +874,7 @@ class MCPCalendarTools:
             # Add custom meeting link if provided
             link_message = ""
             if meeting_code and not auto_generate_link:
-                link_result = self.generate_meeting_link(event_id, meeting_code)
+                link_result = await self.generate_meeting_link(event_id, meeting_code)
                 if link_result['success']:
                     link_message = f"\n🔗 {link_result['message']}"
             
@@ -879,7 +892,7 @@ class MCPCalendarTools:
             }
 
 
-    def get_calendar_events(
+    async def get_calendar_events(
         self,
         start_date: str,
         end_date: str,
@@ -935,7 +948,7 @@ class MCPCalendarTools:
             LIMIT %s
             """
             
-            results = execute_query(
+            results = await execute_query_async(
                 query, 
                 (self.user_id, parsed_start, parsed_end, limit),
                 fetch_all=True
@@ -1194,7 +1207,7 @@ def get_calendar_tools(user_id: int) -> List[Dict[str, Any]]:
     ]
 
 
-def execute_calendar_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+async def execute_calendar_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
     """
     Execute a calendar MCP tool by name.
     
@@ -1209,19 +1222,19 @@ def execute_calendar_tool(user_id: int, tool_name: str, parameters: Dict[str, An
     tools_instance = MCPCalendarTools(user_id)
     
     if tool_name == 'add_task_to_calendar':
-        return tools_instance.add_task_to_calendar(**parameters)
+        return await tools_instance.add_task_to_calendar(**parameters)
     elif tool_name == 'get_collaborators':
-        return tools_instance.get_collaborators(**parameters)
+        return await tools_instance.get_collaborators(**parameters)
     elif tool_name == 'add_collaborators_to_event':
-        return tools_instance.add_collaborators_to_event(**parameters)
+        return await tools_instance.add_collaborators_to_event(**parameters)
     elif tool_name == 'generate_meeting_link':
-        return tools_instance.generate_meeting_link(**parameters)
+        return await tools_instance.generate_meeting_link(**parameters)
     elif tool_name == 'save_todo_only':
-        return tools_instance.save_todo_only(**parameters)
+        return await tools_instance.save_todo_only(**parameters)
     elif tool_name == 'schedule_meeting':
-        return tools_instance.schedule_meeting(**parameters)
+        return await tools_instance.schedule_meeting(**parameters)
     elif tool_name == 'get_calendar_events':
-        return tools_instance.get_calendar_events(**parameters)
+        return await tools_instance.get_calendar_events(**parameters)
     else:
         return {
             'success': False,
@@ -1229,12 +1242,5 @@ def execute_calendar_tool(user_id: int, tool_name: str, parameters: Dict[str, An
         }
 
 
-# Backward-compatible aliases
-def get_tools(user_id: int) -> List[Dict[str, Any]]:
-    """Backward-compatible alias for get_calendar_tools."""
-    return get_calendar_tools(user_id)
-
-
-def execute_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """Backward-compatible alias for execute_calendar_tool."""
-    return execute_calendar_tool(user_id, tool_name, parameters)
+# Backward-compatible aliases (calendar only)
+# Combined tools are now in mcp_models/__init__.py

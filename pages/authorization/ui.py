@@ -11,7 +11,7 @@ from pages.authorization.data import (
     disconnect_google,
     disconnect_github
 )
-from pages.authorization.logic import google_auth_flow
+from pages.authorization.logic import google_auth_flow, github_auth_flow
 
 
 def distinct_authorization_page():
@@ -62,7 +62,7 @@ def distinct_authorization_page():
             if github_status:
                 st.success("Connected", icon="✅")
             else:
-                st.info("Coming Soon", icon="🚧")
+                st.warning("Not Connected", icon="⚠️")
         
         if github_status:
             st.info(f"Connected as: @{github_status['username']}")
@@ -77,8 +77,9 @@ def distinct_authorization_page():
             - 📂 View and manage repositories
             - 🐛 Track issues and pull requests
             - 🔔 Get notifications in your dashboard
+            - 🚀 Create new repos with starter templates
             """)
-            st.button("🔗 Connect GitHub", disabled=True, key="connect_github")
+            github_auth_flow()
     
     st.divider()
     

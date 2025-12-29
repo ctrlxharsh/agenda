@@ -54,9 +54,66 @@ def google_auth_flow():
 
 def github_auth_flow():
     """
-    Placeholder for GitHub OAuth flow.
+    Handles the GitHub OAuth flow.
+    Returns True if already connected or connection successful.
     """
-    st.info("🚧 GitHub integration coming soon!")
+    from utils.github_auth import (
+        get_authorization_url, 
+        exchange_code_for_token, 
+        get_github_user,
+        is_github_configured
+    )
+    from pages.authorization.data import save_github_credentials
+    
+    if not is_github_configured():
+        st.error("GitHub is not configured.")
+        st.info("Admin: Please add `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` to your .env file.")
+        return False
+    
+    # Generate authorization URL
+    auth_url = get_authorization_url()
+    
+    if not auth_url:
+        st.error("Failed to generate GitHub authorization URL.")
+        return False
+    
+    st.write("Authorize access to your GitHub account:")
+    st.link_button("🔗 Connect GitHub Account", auth_url)
+    
+    # Handle callback (Streamlit reloads with params)
+    query_params = st.query_params
+    if "code" in query_params and "state" in query_params:
+        code = query_params["code"]
+        try:
+            # Exchange code for token
+            token_data = exchange_code_for_token(code)
+            
+            if not token_data or "access_token" not in token_data:
+                st.error("Failed to get access token from GitHub.")
+                return False
+            
+            access_token = token_data["access_token"]
+            scopes = token_data.get("scope", "").split(",")
+            
+            # Get GitHub username
+            user_info = get_github_user(access_token)
+            
+            if not user_info:
+                st.error("Failed to fetch GitHub user info.")
+                return False
+            
+            github_username = user_info.get("login")
+            
+            # Save to DB
+            user_id = st.session_state.user['id']
+            save_github_credentials(user_id, github_username, access_token, scopes)
+            
+            st.success(f"✅ GitHub connected as @{github_username}!")
+            st.query_params.clear()
+            st.rerun()
+        except Exception as e:
+            st.error(f"GitHub authorization failed: {e}")
+    
     return False
 
 
@@ -66,3 +123,4 @@ def linkedin_auth_flow():
     """
     st.info("🚧 LinkedIn integration coming soon!")
     return False
+

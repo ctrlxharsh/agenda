@@ -36,3 +36,12 @@ def execute_query(query, params=None, fetch_all=False, fetch_one=False):
             if fetch_one:
                 return cur.fetchone()
             conn.commit()
+
+import asyncio
+
+async def execute_query_async(query, params=None, fetch_all=False, fetch_one=False):
+    """
+    Asynchronously executes a query and returns results if requested.
+    Wraps the synchronous execute_query in a thread.
+    """
+    return await asyncio.to_thread(execute_query, query, params, fetch_all, fetch_one)
