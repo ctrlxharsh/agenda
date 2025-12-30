@@ -1,8 +1,4 @@
-"""
-Session Management
-
-Provides persistent session handling using database-stored tokens.
-"""
+"""Session Management: persistent session handling."""
 
 import secrets
 from datetime import datetime, timedelta
@@ -10,15 +6,7 @@ from utils.db import execute_query
 
 
 def create_session(user_id: int) -> str:
-    """
-    Create a new session for the user.
-    
-    Args:
-        user_id: User ID
-        
-    Returns:
-        Session token string
-    """
+    """Create a new session for the user."""
     # Generate secure token
     token = secrets.token_urlsafe(32)
     expires_at = datetime.now() + timedelta(days=7)  # 7 day expiry
@@ -39,15 +27,7 @@ def create_session(user_id: int) -> str:
 
 
 def validate_session(token: str) -> dict | None:
-    """
-    Validate a session token and return user data if valid.
-    
-    Args:
-        token: Session token
-        
-    Returns:
-        User dict if valid, None otherwise
-    """
+    """Validate a session token and return user data if valid."""
     if not token:
         return None
     

@@ -1,9 +1,3 @@
-"""
-MCP Search Tools
-
-This module provides MCP (Model Context Protocol) tools for web search using DuckDuckGo.
-Includes web search, image search, and news search.
-"""
 
 from typing import Any, Dict, List, Optional
 import asyncio
@@ -20,25 +14,11 @@ class MCPSearchTools:
     """MCP server providing search tools via DuckDuckGo."""
     
     def __init__(self, user_id: int):
-        """
-        Initialize MCP Search Tools.
-        
-        Args:
-            user_id: The ID of the user making the request
-        """
+        """Initialize MCP Search Tools."""
         self.user_id = user_id
     
     async def search_web(self, query: str, limit: int = 5) -> Dict[str, Any]:
-        """
-        Perform a general web search.
-        
-        Args:
-            query: The search terms
-            limit: Maximum number of results to return
-            
-        Returns:
-            Dict containing search results
-        """
+        """Perform a general web search."""
         if not DDGS_AVAILABLE:
             return {
                 'success': False,
@@ -68,13 +48,7 @@ class MCPSearchTools:
             }
 
     async def search_images(self, query: str, limit: int = 5) -> Dict[str, Any]:
-        """
-        Perform an image search.
-        
-        Args:
-            query: The search terms
-            limit: Maximum number of results to return
-        """
+        """Perform an image search."""
         if not DDGS_AVAILABLE:
             return {
                 'success': False,
@@ -112,13 +86,7 @@ class MCPSearchTools:
             }
 
     async def search_news(self, query: str, limit: int = 5) -> Dict[str, Any]:
-        """
-        Perform a news search.
-        
-        Args:
-            query: The search terms
-            limit: Maximum number of results to return
-        """
+        """Perform a news search."""
         if not DDGS_AVAILABLE:
             return {
                 'success': False,
@@ -147,15 +115,7 @@ class MCPSearchTools:
 
 
 def get_search_tools(user_id: int) -> List[Dict[str, Any]]:
-    """
-    Get available search MCP tools.
-    
-    Args:
-        user_id: User ID to create tools for
-        
-    Returns:
-        List of tool definitions in MCP format
-    """
+    """Get available search MCP tools."""
     tools_instance = MCPSearchTools(user_id)
     
     return [
@@ -220,17 +180,7 @@ def get_search_tools(user_id: int) -> List[Dict[str, Any]]:
 
 
 async def execute_search_tool(user_id: int, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Execute a search MCP tool by name.
-    
-    Args:
-        user_id: User ID executing the tool
-        tool_name: Name of the tool to execute
-        parameters: Parameters to pass to the tool
-        
-    Returns:
-        Tool execution result
-    """
+    """Execute a search MCP tool by name."""
     tools_instance = MCPSearchTools(user_id)
     
     if tool_name == 'search_web':

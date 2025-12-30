@@ -8,10 +8,7 @@ from utils.db import execute_query
 
 
 def check_google_connection(user_id: int) -> dict | None:
-    """
-    Check if user has Google Calendar connected.
-    Returns connection details if connected, None otherwise.
-    """
+    """Check if user has Google Calendar connected."""
     query = """
     SELECT access_token, created_at 
     FROM user_google_accounts 
@@ -27,10 +24,7 @@ def check_google_connection(user_id: int) -> dict | None:
 
 
 def check_gmail_connection(user_id: int) -> dict | None:
-    """
-    Check if user has Gmail connected.
-    Returns connection details if connected, None otherwise.
-    """
+    """Check if user has Gmail connected."""
     query = """
     SELECT access_token, connected_at 
     FROM user_gmail_accounts 
@@ -46,10 +40,7 @@ def check_gmail_connection(user_id: int) -> dict | None:
 
 
 def check_github_connection(user_id: int) -> dict | None:
-    """
-    Check if user has GitHub connected.
-    Returns connection details if connected, None otherwise.
-    """
+    """Check if user has GitHub connected."""
     query = """
     SELECT github_username, connected_at 
     FROM user_github_accounts 
@@ -66,27 +57,21 @@ def check_github_connection(user_id: int) -> dict | None:
 
 
 def disconnect_google(user_id: int) -> bool:
-    """
-    Remove Google Calendar connection for user.
-    """
+    """Remove Google Calendar connection for user."""
     query = "DELETE FROM user_google_accounts WHERE user_id = %s"
     execute_query(query, (user_id,))
     return True
 
 
 def disconnect_gmail(user_id: int) -> bool:
-    """
-    Remove Gmail connection for user.
-    """
+    """Remove Gmail connection for user."""
     query = "DELETE FROM user_gmail_accounts WHERE user_id = %s"
     execute_query(query, (user_id,))
     return True
 
 
 def disconnect_github(user_id: int) -> bool:
-    """
-    Remove GitHub connection for user.
-    """
+    """Remove GitHub connection for user."""
     query = "DELETE FROM user_github_accounts WHERE user_id = %s"
     execute_query(query, (user_id,))
     return True

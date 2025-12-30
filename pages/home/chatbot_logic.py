@@ -20,12 +20,10 @@ from langgraph.prebuilt import create_react_agent
 from utils.env_config import get_openai_api_key
 import mcp_models
 
-# Configure logging for observability
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-# Updated system prompt for interactive confirmation workflow
 SYSTEM_PROMPT = """You are a helpful AI assistant. You manage the user's calendar, tasks, meetings, and GitHub repositories.
 
 **Calendar Tools:**
@@ -152,7 +150,6 @@ class ChatbotAgent:
         
         logger.info(f"Initializing ChatbotAgent for user_id={user_id}, username={username}")
         
-        # Initialize OpenAI client
         api_key = get_openai_api_key()
         self.llm = ChatOpenAI(
             model="gpt-5-mini",
@@ -160,11 +157,9 @@ class ChatbotAgent:
             api_key=api_key
         )
         
-        # Create tools from MCP server
         self.tools = self._create_langchain_tools()
         logger.info(f"Created {len(self.tools)} tools")
         
-        # Create the agent using LangGraph's prebuilt create_react_agent
         self.agent = create_react_agent(
             model=self.llm,
             tools=self.tools,
@@ -191,17 +186,13 @@ class ChatbotAgent:
             tool_desc = mcp_tool['description']
             tool_params = mcp_tool.get('parameters', {})
             
-            # Check if the function is a coroutine function
             if inspect.iscoroutinefunction(tool_func):
-                # For async tools with parameters schema, create args_schema
                 if tool_params and 'properties' in tool_params:
-                    # Build pydantic model from JSON schema
                     fields = {}
                     for param_name, param_def in tool_params['properties'].items():
                         param_type = str  # default
-                        param_default = ...  # required by default
+                        param_default = ...  
                         
-                        # Map JSON types to Python types
                         if param_def.get('type') == 'integer':
                             param_type = int
                         elif param_def.get('type') == 'boolean':
@@ -211,13 +202,11 @@ class ChatbotAgent:
                         elif param_def.get('type') == 'object':
                             param_type = dict
                         
-                        # Check if parameter is required
                         if param_name not in tool_params.get('required', []):
                             param_default = param_def.get('default', None)
                         
                         fields[param_name] = (param_type, param_default)
                     
-                    # Create pydantic model
                     ArgsSchema = create_model(f"{tool_name}_args", **fields)
                     
                     structured_tool = StructuredTool(
@@ -227,7 +216,6 @@ class ChatbotAgent:
                         args_schema=ArgsSchema
                     )
                 else:
-                    # No schema, use from_function
                     structured_tool = StructuredTool.from_function(
                         func=lambda: None,
                         coroutine=tool_func,
@@ -235,7 +223,6 @@ class ChatbotAgent:
                         description=tool_desc
                     )
             else:
-                # Standard sync tool
                 structured_tool = StructuredTool.from_function(
                     func=tool_func,
                     name=tool_name,
@@ -259,7 +246,6 @@ class ChatbotAgent:
         """
         logger.info(f"Chat Stream: Received - {user_message[:50]}...")
         
-        # Convert chat history to LangChain messages
         messages: List[BaseMessage] = []
         
         if chat_history:
@@ -269,15 +255,12 @@ class ChatbotAgent:
                 elif msg['role'] == 'assistant':
                     messages.append(AIMessage(content=msg['content']))
         
-        # Add current user message
         messages.append(HumanMessage(content=user_message))
         
         try:
-            # Stream events from the agent
             async for event in self.agent.astream_events({"messages": messages}, version="v1"):
                 kind = event["event"]
                 
-                # Yield token events for streaming the response
                 if kind == "on_chat_model_stream":
                     content = event["data"]["chunk"].content
                     if content:
@@ -286,7 +269,6 @@ class ChatbotAgent:
                             "content": content
                         }
                 
-                # Yield tool start events
                 elif kind == "on_tool_start":
                     yield {
                         "type": "tool_start",
@@ -294,7 +276,6 @@ class ChatbotAgent:
                         "input": event["data"].get("input")
                     }
                 
-                # Yield tool end events
                 elif kind == "on_tool_end":
                     yield {
                         "type": "tool_end",
@@ -321,9 +302,6 @@ class ChatbotAgent:
         Returns:
             The assistant's response
         """
-        # This is a legacy wrapper. Ideally, the UI should use chat_stream.
-        # Since we can't easily run async code here without an event loop,
-        # we'll try to use asyncio.run if no loop is running.
         
         async def run_chat():
             full_response = ""
@@ -335,8 +313,6 @@ class ChatbotAgent:
         try:
             return asyncio.run(run_chat())
         except RuntimeError:
-            # If loop is already running (e.g. in Streamlit), we can't use asyncio.run
-            # This method shouldn't be used in async contexts anyway.
             return "Error: Synchronous chat called in async context. Use chat_stream."
 
 

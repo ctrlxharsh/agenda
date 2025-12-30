@@ -6,15 +6,13 @@ from datetime import datetime, timedelta
 def distinct_calendar_page():
     st.title("My Calendar")
     user_id = st.session_state.user['id']
-    
-    # 1. Check App Config
     import os
     if not os.path.exists("client_secret.json"):
         st.error("Google Login is not configured.")
         st.info("Admin: Please place `client_secret.json` in the app root to enable this feature.")
         return
 
-    # 2. Check User Auth
+
     service = get_calendar_service(user_id)
     
     if not service:
@@ -24,15 +22,11 @@ def distinct_calendar_page():
     else:
         st.success("Connected to Google Calendar")
         
-        # --- Date Range Logic (Wide Window) ---
-        # Strategy: Fetch 6 months back and 6 months forward to allow smooth navigation
-        # without needing frequent server callbacks (which can be flaky).
-        
+        # Wide date range fetch (approx 6 months)
         now = datetime.utcnow()
         start_date = now - timedelta(days=180) # ~6 months ago
         end_date = now + timedelta(days=180)   # ~6 months future
         
-        # 3. Fetch Events for Wide Range
         try:
             events = get_events_by_range(service, start_date.isoformat() + "Z", end_date.isoformat() + "Z")
             
@@ -47,7 +41,6 @@ def distinct_calendar_page():
                     # Optional: Add colors or other props
                 })
             
-            # 4. Render Calendar
             calendar_options = {
                 "headerToolbar": {
                     "left": "today prev,next",
@@ -63,8 +56,6 @@ def distinct_calendar_page():
                 .fc-event-title { font-weight: 700; }
                 .fc-toolbar-title { font-size: 1.2rem; }
             """
-            
-            # Render (Client-side navigation for loaded events)
             calendar(
                 events=calendar_events, 
                 options=calendar_options, 

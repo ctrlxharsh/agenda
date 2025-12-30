@@ -1,9 +1,4 @@
-"""
-MCP Gmail Tools
 
-This module provides MCP (Model Context Protocol) tools for Gmail management.
-Includes sending emails, reading emails, and searching/filtering capabilities.
-"""
 
 from typing import Any, Dict, List, Optional
 import base64
@@ -15,24 +10,10 @@ from googleapiclient.discovery import build
 from utils.db import execute_query_async
 
 class MCPGmailTools:
-    """MCP server providing Gmail management tools."""
-    
     def __init__(self, user_id: int):
-        """
-        Initialize MCP Gmail Tools for a specific user.
-        
-        Args:
-            user_id: The ID of the user making the request
-        """
         self.user_id = user_id
     
     async def get_google_credentials(self) -> Optional[Credentials]:
-        """
-        Retrieve Google Credentials for the user.
-        
-        Returns:
-            Google OAuth credentials if available, None otherwise
-        """
         query = """
         SELECT access_token, refresh_token, token_expiry, token_uri, 
                client_id, client_secret, scopes 
@@ -57,17 +38,6 @@ class MCPGmailTools:
         return Credentials(**creds_dict)
 
     async def send_email(self, to: str, subject: str, body: str) -> Dict[str, Any]:
-        """
-        Send an email using the user's Gmail account.
-        
-        Args:
-            to: Recipient email address
-            subject: Email subject
-            body: Email body content (text)
-            
-        Returns:
-            Dict containing success status and message
-        """
         try:
             creds = await self.get_google_credentials()
             if not creds:
@@ -113,16 +83,6 @@ class MCPGmailTools:
             }
 
     async def read_emails(self, query: str = "", limit: int = 5) -> Dict[str, Any]:
-        """
-        Read and summarize emails from Gmail.
-        
-        Args:
-            query: Search query (e.g., "from:boss important", "is:unread", "hackathon")
-            limit: Maximum number of emails to retrieve (default 5)
-            
-        Returns:
-            Dict containing list of emails and success status
-        """
         try:
             creds = await self.get_google_credentials()
             if not creds:
@@ -202,15 +162,6 @@ class MCPGmailTools:
             }
 
 def get_gmail_tools(user_id: int) -> List[Dict[str, Any]]:
-    """
-    Get available Gmail MCP tools.
-    
-    Args:
-        user_id: User ID to create tools for
-        
-    Returns:
-        List of tool definitions in MCP format
-    """
     tools_instance = MCPGmailTools(user_id)
     
     return [
