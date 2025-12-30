@@ -9,7 +9,6 @@ def search_users(term):
         return []
     current_id = st.session_state.user['id']
     results = search_users_db(term, current_id)
-    # Map to dicts
     return [{"id": r[0], "username": r[1], "email": r[2]} for r in results]
 
 def send_request(receiver_id):
@@ -27,7 +26,7 @@ def handle_request(request_id, sender_id, action):
     if action == 'accept':
         accept_request_db(request_id, sender_id, current_id)
         st.success("Collaborator added!")
-        # Update session state to reflect new collaborator immediately (optional, or rely on rerun)
+        
         if st.session_state.user.get('collaborator_ids') is None:
              st.session_state.user['collaborator_ids'] = []
         st.session_state.user['collaborator_ids'].append(sender_id)
@@ -45,9 +44,9 @@ def get_my_collaborators():
 
 def remove_collaborator(target_id):
     current_id = st.session_state.user['id']
-    from pages.home.data import remove_collaborator_db # Local import to match style/avoid circular depending on top level
+    from pages.home.data import remove_collaborator_db
     remove_collaborator_db(current_id, target_id)
-    # Update local session state
+    
     if target_id in st.session_state.user.get('collaborator_ids', []):
         st.session_state.user['collaborator_ids'].remove(target_id)
     st.success("Collaborator removed.")

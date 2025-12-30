@@ -143,6 +143,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.env.langfuse
 
 # Spyder project settings
 .spyderproject
@@ -205,3 +206,5 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+database_schema_20251229_222933.txt
+README_LANGFUSE.md

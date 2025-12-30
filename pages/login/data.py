@@ -1,10 +1,6 @@
 from utils.db import execute_query
 
 def verify_credentials(username, password):
-    """
-    Verifies user credentials against the database using pgcrypto.
-    Returns the user dictionary if valid, None otherwise.
-    """
     query = """
     SELECT id, username, full_name, email, is_admin, collaborator_ids
     FROM users 
@@ -14,7 +10,6 @@ def verify_credentials(username, password):
     result = execute_query(query, (username, password), fetch_one=True)
     
     if result:
-        # Map tuple to dictionary based on query order
         return {
             "id": result[0],
             "username": result[1],
@@ -26,9 +21,6 @@ def verify_credentials(username, password):
     return None
 
 def create_user(username, password, email, full_name):
-    """
-    Creates a new user with hashed password.
-    """
     query = """
     INSERT INTO users (username, password_hash, email, full_name)
     VALUES (%s, crypt(%s, gen_salt('bf')), %s, %s)

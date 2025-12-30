@@ -6,9 +6,7 @@ from googleapiclient.discovery import build
 import datetime
 
 def get_calendar_service(user_id):
-    """
-    Returns a Google Calendar Service object if authenticated, else None.
-    """
+    """Returns a Google Calendar Service object if authenticated, else None."""
     token_data = get_google_token_db(user_id)
     if not token_data:
         return None
@@ -25,21 +23,19 @@ def get_calendar_service(user_id):
     return build('calendar', 'v3', credentials=creds)
 
 def auth_flow_step():
-    """
-    Handles the UI/Logic for starting Authorization.
-    """
+    """Handles the UI/Logic for starting Authorization."""
     flow = get_flow()
     if not flow:
         st.error("Missing `client_secret.json`. Please add it to the project root to enable Google Calendar.")
         return
     
-    # 1. Generate URL
     auth_url, _ = flow.authorization_url(prompt='consent')
     
     st.write("Authorize access to your Google Calendar:")
     st.link_button("Connect Google Account", auth_url)
 
-    # 2. Handle Callback (Streamlit reloads with params)
+    st.link_button("Connect Google Account", auth_url)
+
     query_params = st.query_params
     if "code" in query_params:
         code = query_params["code"]
@@ -47,7 +43,8 @@ def auth_flow_step():
             flow.fetch_token(code=code)
             creds = flow.credentials
             
-            # Save to DB
+            creds = flow.credentials
+            
             user_id = st.session_state.user['id']
             save_google_token_db(user_id, creds)
             
@@ -58,10 +55,7 @@ def auth_flow_step():
             st.error(f"Auth failed: {e}")
 
 def get_events_by_range(service, time_min, time_max):
-    """
-    Fetches events within a specific time range.
-    time_min, time_max: ISO format strings (with 'Z' or offset)
-    """
+    """Fetches events within a specific time range."""
     events_result = service.events().list(
         calendarId='primary',
         timeMin=time_min,

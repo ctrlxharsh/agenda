@@ -2,7 +2,6 @@ import streamlit as st
 from pages.login.ui import distinct_login_page
 # from pages.home.ui import distinct_home_page # Deferred import to avoid circular dependency or early load errors if not ready
 
-# Set page config
 st.set_page_config(
     page_title="AGENDA",
     page_icon="📅",
@@ -10,14 +9,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load Custom CSS
 def local_css(file_name):
     with open(file_name) as f:
         st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
 
 local_css("styles/main.css")
 
-# Session State Initialization
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "user" not in st.session_state:
@@ -27,7 +24,6 @@ def main():
     if not st.session_state.authenticated:
         distinct_login_page()
     else:
-        # Navigation State
         if "current_page" not in st.session_state:
             st.session_state.current_page = "Dashboard"
 
@@ -70,7 +66,6 @@ def main():
                 st.session_state.user = None
                 st.rerun()
 
-        # Render Page
         if st.session_state.current_page == "Dashboard":
             from pages.home.ui import distinct_home_page
             distinct_home_page()

@@ -1,29 +1,14 @@
-"""
-MCP GitHub Tools
 
-This module provides MCP (Model Context Protocol) tools for GitHub integration.
-Includes repository management, issues, PRs, notifications, and project creation.
-"""
 
 from typing import Any, Dict, List, Optional
-import requests
-import base64
-import asyncio
+import requests, base64, asyncio
 from pages.authorization.data import get_github_access_token, check_github_connection
 
 GITHUB_API_BASE = "https://api.github.com"
 
 
 class MCPGitHubTools:
-    """MCP server providing GitHub management tools."""
-    
     def __init__(self, user_id: int):
-        """
-        Initialize MCP GitHub Tools for a specific user.
-        
-        Args:
-            user_id: The ID of the user making the request
-        """
         self.user_id = user_id
         self._access_token = None
     
@@ -42,12 +27,6 @@ class MCPGitHubTools:
         }
     
     async def is_connected(self) -> Dict[str, Any]:
-        """
-        Check if user has GitHub connected.
-        
-        Returns:
-            Dict with connection status and username if connected
-        """
         status = await asyncio.to_thread(check_github_connection, self.user_id)
         if status:
             return {
@@ -70,14 +49,7 @@ class MCPGitHubTools:
         sort: str = "updated",
         limit: int = 30
     ) -> Dict[str, Any]:
-        """
-        List user's repositories.
-        
-        Args:
-            visibility: "all", "public", or "private"
-            sort: "created", "updated", "pushed", "full_name"
-            limit: Max repos to return (max 100)
-        """
+        """List user's repositories."""
         if not self._get_token():
             return {'success': False, 'error': 'GitHub not connected'}
         
@@ -124,13 +96,7 @@ class MCPGitHubTools:
             return {'success': False, 'error': str(e)}
     
     async def get_repository_details(self, owner: str, repo: str) -> Dict[str, Any]:
-        """
-        Get detailed repository information.
-        
-        Args:
-            owner: Repository owner username
-            repo: Repository name
-        """
+        """Get detailed repository information."""
         if not self._get_token():
             return {'success': False, 'error': 'GitHub not connected'}
         
@@ -181,14 +147,7 @@ class MCPGitHubTools:
         repo: str,
         path: str = ""
     ) -> Dict[str, Any]:
-        """
-        List files and folders in a repository path.
-        
-        Args:
-            owner: Repository owner
-            repo: Repository name
-            path: Path within repository (empty for root)
-        """
+        """List files and folders in a repository path."""
         if not self._get_token():
             return {'success': False, 'error': 'GitHub not connected'}
         
@@ -239,14 +198,7 @@ class MCPGitHubTools:
             return {'success': False, 'error': str(e)}
     
     async def read_file(self, owner: str, repo: str, path: str) -> Dict[str, Any]:
-        """
-        Read file content from repository.
-        
-        Args:
-            owner: Repository owner
-            repo: Repository name
-            path: File path
-        """
+        """Read file content from repository."""
         if not self._get_token():
             return {'success': False, 'error': 'GitHub not connected'}
         
@@ -282,13 +234,7 @@ class MCPGitHubTools:
             return {'success': False, 'error': str(e)}
     
     async def summarize_repository(self, owner: str, repo: str) -> Dict[str, Any]:
-        """
-        Get repository summary including README and stats.
-        
-        Args:
-            owner: Repository owner
-            repo: Repository name
-        """
+        """Get repository summary including README and stats."""
         if not self._get_token():
             return {'success': False, 'error': 'GitHub not connected'}
         
@@ -757,6 +703,7 @@ Open `index.html` in your browser or visit the GitHub Pages URL.
         except Exception as e:
             return {'success': False, 'error': str(e)}
     
+
     async def create_empty_repository(
         self,
         name: str,
@@ -765,20 +712,11 @@ Open `index.html` in your browser or visit the GitHub Pages URL.
         private: bool = False,
         license_type: str = "mit"
     ) -> Dict[str, Any]:
-        """
-        Create an empty repository with README, .gitignore, and license.
         
-        Args:
-            name: Repository name
-            project_type: Type of project for .gitignore (python, node, java, go, rust, etc.)
-            description: Repository description
-            private: Whether to make it private
-            license_type: License type (mit, apache, gpl, etc.)
-        """
         if not self._get_token():
             return {'success': False, 'error': 'GitHub not connected'}
         
-        # Gitignore templates for different project types
+        # Gitignore templates
         gitignore_templates = {
             "python": """# Python
 __pycache__/

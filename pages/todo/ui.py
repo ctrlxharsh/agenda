@@ -27,18 +27,17 @@ def distinct_todo_page():
 
     user_id = st.session_state.user['id']
     
-    # Refresh & Filters
+    # Refresh & Filters logic
     col_filter1, col_filter2, col_refresh = st.columns([1, 1, 1])
     with col_filter1:
         filter_priority = st.selectbox("Priority", ["All", "Urgent", "High", "Medium", "Low"], key="filter_p")
     with col_filter2:
         filter_date = st.selectbox("Date", ["All", "Today", "This Week", "Overdue", "Custom Range"], key="filter_d")
     with col_refresh:
-        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True) # Spacer for label alignment
+        st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True) 
         if st.button("🔄 Refresh", use_container_width=True):
             st.rerun()
     
-    # Custom Date Inputs
     custom_start_date = None
     custom_end_date = None
     if filter_date == "Custom Range":
@@ -51,26 +50,20 @@ def distinct_todo_page():
     else:
         st.markdown("---")
     
-    # Fetch all items
     items = get_all_work_items(user_id)
     
     if not items:
         st.info("🎉 Your workboard is empty! Ask the AI assistant to add tasks, meetings, or reminders.")
         return
-
-    # Categorize items
+    
     tasks = []
     todos = []
     meetings = []
 
     today = datetime.now().date()
-    # Logic for "All" - User requested "least 6 months up to today". 
-    # Interpreting as: Exclude very old items (> 6 months ago), preserve future.
     six_months_ago = today - timedelta(days=180)
 
     for item in items:
-        # Unpack
-        # task_id, title, description, priority, due_date, category, status, created_at, start_time, end_time
         i_dict = {
             'id': item[0], 'title': item[1], 'description': item[2], 
             'priority': item[3], 'due_date': item[4], 'category': item[5], 
@@ -78,13 +71,9 @@ def distinct_todo_page():
             'start_time': item[8], 'end_time': item[9]
         }
         
-        # Apply Filters
-        # 1. Priority
         if filter_priority != "All" and i_dict['priority'].lower() != filter_priority.lower():
             continue
             
-        # 3. Date Filter
-        # Fix: due_date might be date or datetime. created_at is timestamp (datetime).
         item_date = None
         if i_dict['due_date']:
             item_date = i_dict['due_date']
@@ -112,8 +101,6 @@ def distinct_todo_page():
                 if custom_start_date and custom_end_date:
                     if not (custom_start_date <= item_date <= custom_end_date): continue
             elif filter_date == "All":
-                # "Least 6 months" logic
-                # Keep if item is newer than 6 months ago OR is in the future
                 if item_date < six_months_ago: continue
 
         status = i_dict['status']
@@ -128,32 +115,24 @@ def distinct_todo_page():
             # Fallback
             todos.append(i_dict)
 
-    # Sorting Logic helper
     priority_map = {"urgent": 0, "high": 1, "medium": 2, "low": 3}
     
     def get_priority_val(x):
         return priority_map.get(x['priority'].lower(), 4)
     
-    # 1. Tasks: Priority -> Deadline
     tasks.sort(key=lambda x: (get_priority_val(x), x['due_date'] or datetime.max))
-    
-    # 2. To-Do: Priority -> Date (Created/Due)
     todos.sort(key=lambda x: (get_priority_val(x), x['due_date'] or x['created_at'] or datetime.max))
     
-    # 3. Meetings: Priority -> Upcoming Date & Time
-    # Note: Usually chronological is best for meetings, but user requested priority sort for ALL.
     def get_meeting_dt(x):
         d = x['due_date'] or datetime.max
         if x.get('start_time'):
-            # Combine if possible, otherwise use date
-            if hasattr(d, 'date'): # it's datetime
+            if hasattr(d, 'date'):
                  return d
         return d
 
     meetings.sort(key=lambda x: (get_priority_val(x), x['due_date'] or datetime.max))
     
 
-    # Display Functions
     def render_item(item, show_priority=True, show_date=True, show_desc_inline=False):
         p_emoji = "⚪"
         if item['priority'] == 'urgent': p_emoji = "🔴"
@@ -164,20 +143,17 @@ def distinct_todo_page():
         if item['due_date']:
             due_str = item['due_date'].strftime('%b %d')
             
-        # Enhanced Time Display for Meetings/Scheduled Tasks
         if item.get('start_time'):
             time_part = item['start_time'].strftime('%H:%M')
             if item.get('end_time'):
                 time_part += f"-{item['end_time'].strftime('%H:%M')}"
             
-            if item.get('due_date'): # Using due_date as the primary date for scheduled items
+            if item.get('due_date'): 
                  item_dt = item['due_date']
-                 # Check if we need to parse date
                  if hasattr(item_dt, 'date'): item_dt = item_dt.date()
                  date_str = item_dt.strftime('%b %d')
                  due_str = f"{date_str}, {time_part}"
             else:
-                 # Fallback if only time exists (shouldn't happen for meetings usually)
                  due_str = f"{due_str}, {time_part}" if due_str else time_part
         
         col1, col2, col3 = st.columns([0.7, 0.2, 0.1])
@@ -196,7 +172,6 @@ def distinct_todo_page():
                 mark_task_complete(item['id'])
                 st.rerun()
 
-    # SECTION 1: TASKS (Work/project based)
     with st.expander(f"📂 Tasks ({len(tasks)})", expanded=True):
         if tasks:
             with st.container(border=True):
@@ -205,7 +180,6 @@ def distinct_todo_page():
         else:
             st.caption("No project tasks.")
 
-    # SECTION 2: TO-DO (Quick actions)
     with st.expander(f"📝 To-Do ({len(todos)})", expanded=True):
         if todos:
             with st.container(border=True):
@@ -214,7 +188,6 @@ def distinct_todo_page():
         else:
             st.caption("No quick to-dos.")
 
-    # SECTION 3: MEETINGS
     with st.expander(f"📅 Meetings ({len(meetings)})", expanded=True):
         if meetings:
             with st.container(border=True):
@@ -223,6 +196,5 @@ def distinct_todo_page():
         else:
             st.caption("No upcoming meetings.")
 
-    # Legend
     st.markdown("---")
     st.caption("Priority: 🔴 Urgent | 🟠 High | 🔵 Medium | ⚪ Low")
