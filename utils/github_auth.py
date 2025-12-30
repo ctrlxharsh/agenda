@@ -19,7 +19,7 @@ GITHUB_SCOPES = [
     "read:org",       # Read org membership
 ]
 
-REDIRECT_URI = "http://localhost:8501"  # Streamlit port
+
 
 
 def get_authorization_url(state: str = "github_auth") -> Optional[str]:
@@ -34,7 +34,7 @@ def get_authorization_url(state: str = "github_auth") -> Optional[str]:
     auth_url = (
         f"{GITHUB_AUTHORIZE_URL}"
         f"?client_id={client_id}"
-        f"&redirect_uri={REDIRECT_URI}"
+        f"&redirect_uri={EnvConfig.get_app_url()}"
         f"&scope={scopes}"
         f"&state={state}"
     )
@@ -56,7 +56,7 @@ def exchange_code_for_token(code: str) -> Optional[Dict[str, Any]]:
             "client_id": client_id,
             "client_secret": client_secret,
             "code": code,
-            "redirect_uri": REDIRECT_URI,
+            "redirect_uri": EnvConfig.get_app_url(),
         },
         headers={"Accept": "application/json"}
     )

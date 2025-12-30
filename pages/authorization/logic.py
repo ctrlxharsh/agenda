@@ -7,12 +7,10 @@ import os
 
 def google_auth_flow():
     os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
-    if not os.path.exists("client_secret.json"):
-        st.error("Google Calendar is not configured.")
-        return False
-        
     flow = get_flow()
-    flow.redirect_uri = "http://localhost:8501" # Ensure match
+    if not flow:
+        st.error("Google Calendar is not configured. Missing client_secret.json or GOOGLE_CLIENT_ID/SECRET env vars.")
+        return False
     
     # We use state='calendar' to identify this flow
     auth_url, state = flow.authorization_url(prompt='consent', state='calendar')
@@ -44,13 +42,12 @@ def gmail_auth_flow():
     from pages.calendar.data import save_gmail_token_db
     
     os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
-    if not os.path.exists("client_secret.json"):
-        st.error("Google Client Secrets not found.")
-        return False
-        
     # Request ONLY Gmail scopes (and maybe basic profile implicitly)
     flow = get_flow(override_scopes=GMAIL_SCOPES)
-    flow.redirect_uri = "http://localhost:8501"
+    
+    if not flow:
+        st.error("Google Client Secrets not configured.")
+        return False
     
     # State='gmail' to distinguish
     auth_url, state = flow.authorization_url(prompt='consent', state='gmail')
