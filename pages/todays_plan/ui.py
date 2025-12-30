@@ -16,12 +16,16 @@ def distinct_todays_plan_page():
     col1, col2 = st.columns([1, 4])
     with col1:
         if st.button("✨ Generate Plan", type="primary", use_container_width=True):
-            with st.spinner("AI is thinking hard to schedule your day..."):
-                items = fetch_todays_items(user_id)
+            api_key = st.session_state.get('openai_api_key')
+            if not api_key:
+                st.error("Please enter your OpenAI API key in the sidebar settings first.")
+            else:
+                with st.spinner("AI is thinking hard to schedule your day..."):
+                    items = fetch_todays_items(user_id)
                 if not items:
                     st.warning("No tasks or meetings found for today! Enjoy your free time. 🎉")
                 else:
-                    schedule_updates = generate_schedule_with_ai(items)
+                    schedule_updates = generate_schedule_with_ai(items, api_key=api_key.strip())
                     
                     if schedule_updates:
                         st.session_state['ai_schedule_reasoning'] = schedule_updates

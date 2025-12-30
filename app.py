@@ -22,6 +22,8 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 if "user" not in st.session_state:
     st.session_state.user = None
+if "openai_api_key" not in st.session_state:
+    st.session_state.openai_api_key = ""
 
 def main():
     if not st.session_state.authenticated:
@@ -63,6 +65,32 @@ def main():
             if st.button("Authorization", type="primary" if st.session_state.current_page == "Authorization" else "secondary", use_container_width=True):
                 st.session_state.current_page = "Authorization"
                 st.rerun()
+
+            st.markdown("### Settings")
+            
+            # API Key Input - Using shadowing pattern for better persistence
+            if "openai_api_key" not in st.session_state:
+                st.session_state.openai_api_key = ""
+                
+            current_key = st.text_input(
+                "OpenAI API Key", 
+                value=st.session_state.openai_api_key,
+                type="password", 
+                help="Enter your OpenAI API key here"
+            )
+            
+            # Immediately update session state
+            st.session_state.openai_api_key = current_key
+            
+            # Status Indicator
+            key_val = st.session_state.openai_api_key.strip()
+            if key_val:
+                if key_val.startswith("sk-"):
+                    st.caption(f"✅ Key saved ({key_val[:3]}...{key_val[-4:]})")
+                else:
+                    st.caption("⚠️ Key format might be invalid")
+            else:
+                st.caption("ℹ️ Please enter key to enable AI features")
 
             st.divider()
             if st.button("Logout", use_container_width=True):

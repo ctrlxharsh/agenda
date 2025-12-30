@@ -72,12 +72,15 @@ def update_task_times(updates: List[Dict[str, Any]]) -> bool:
         print(f"Error updating task times: {e}")
         return False
 
-def generate_schedule_with_ai(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def generate_schedule_with_ai(items: List[Dict[str, Any]], api_key: str = None) -> List[Dict[str, Any]]:
     """Use OpenAI to generate a schedule for the given items."""
     if not items:
         return []
 
-    api_key = get_openai_api_key()
+    if not api_key:
+        print("OpenAI API Key is missing.")
+        return []
+
     llm = ChatOpenAI(model="gpt-5-mini", temperature=0.2, api_key=api_key)
     
     items_json = json.dumps(items, default=str)

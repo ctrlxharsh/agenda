@@ -53,23 +53,26 @@ def distinct_home_page():
         # Set processing state
         st.session_state.chat_processing = True
         
+        api_key = st.session_state.get('openai_api_key')
+        
+        if not api_key:
+            st.warning("Please enter your OpenAI API key in the sidebar settings first.")
+            st.session_state.chat_messages.append({"role": "assistant", "content": "Please enter your OpenAI API key in the sidebar settings first."})
+            st.session_state.chat_processing = False
+            st.rerun()
+            return
+
         # Get assistant response
         with st.chat_message("assistant"):
-            # Create chatbot instance
-            chatbot = create_chatbot(
-                user_id=st.session_state.user['id'],
-                username=st.session_state.user['username']
-            )
-            
             # Async function to handle streaming
-            async def process_chat():
+            async def process_chat(bot):
                 response_placeholder = st.empty()
                 full_response = ""
                 status_placeholder = st.empty()
                 
                 # We'll use a status container for tool execution
                 with status_placeholder.status("Thinking...", expanded=True) as status:
-                    async for event in chatbot.chat_stream(
+                    async for event in bot.chat_stream(
                         user_message=prompt,
                         chat_history=st.session_state.chat_messages[:-1]
                     ):
@@ -105,21 +108,32 @@ def distinct_home_page():
                     
                     status.update(label="Finished", state="complete", expanded=False)
                 
-                # Clear the status placeholder if you want it to disappear, or keep it collapsed
-                # status_placeholder.empty() 
-                
                 response_placeholder.markdown(full_response)
                 return full_response
 
             try:
+                # Create chatbot instance
+                chatbot = create_chatbot(
+                    user_id=st.session_state.user['id'],
+                    username=st.session_state.user['username'],
+                    api_key=api_key.strip()
+                )
+                
                 # Run the async process
-                response = asyncio.run(process_chat())
+                response = asyncio.run(process_chat(chatbot))
                 
                 # Add assistant response to chat history
                 st.session_state.chat_messages.append({"role": "assistant", "content": response})
                 
             except Exception as e:
+                import openai
                 error_message = f"I apologize, but I encountered an error: {str(e)}"
+                
+                if isinstance(e, openai.AuthenticationError):
+                    error_message = "🔴 **Authentication Failed**: The provided OpenAI API Key is invalid. Please check the key in the sidebar."
+                elif "RateLimitError" in str(e):
+                    error_message = "⏳ **Rate Limit**: You have exceeded your OpenAI API quota."
+                
                 st.error(error_message)
                 st.session_state.chat_messages.append({"role": "assistant", "content": error_message})
         

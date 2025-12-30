@@ -16,8 +16,6 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
 from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
-
-from utils.env_config import get_openai_api_key
 import mcp_models
 
 logging.basicConfig(level=logging.INFO)
@@ -137,24 +135,29 @@ Be conversational, friendly, and HELPFUL. Guide the user through the process nat
 class ChatbotAgent:
     """LangGraph-powered chatbot agent using create_react_agent."""
     
-    def __init__(self, user_id: int, username: str):
+    def __init__(self, user_id: int, username: str, api_key: Optional[str] = None):
         """
         Initialize the chatbot agent.
         
         Args:
             user_id: ID of the user chatting
             username: Username for personalization
+            api_key: Optional openai api key
         """
         self.user_id = user_id
         self.username = username
+        self.api_key = api_key
         
+        if not self.api_key:
+            raise ValueError("OpenAI API Key is required. Please set it in the sidebar settings.")
+            
         logger.info(f"Initializing ChatbotAgent for user_id={user_id}, username={username}")
         
-        api_key = get_openai_api_key()
+        logger.info(f"Initializing ChatbotAgent for user_id={user_id}, username={username}")
         self.llm = ChatOpenAI(
             model="gpt-5-mini",
             temperature=0.6,
-            api_key=api_key
+            api_key=self.api_key
         )
         
         self.tools = self._create_langchain_tools()
@@ -316,7 +319,7 @@ class ChatbotAgent:
             return "Error: Synchronous chat called in async context. Use chat_stream."
 
 
-def create_chatbot(user_id: int, username: str) -> ChatbotAgent:
+def create_chatbot(user_id: int, username: str, api_key: Optional[str] = None) -> ChatbotAgent:
     """
     Factory function to create a chatbot agent.
     
@@ -327,4 +330,4 @@ def create_chatbot(user_id: int, username: str) -> ChatbotAgent:
     Returns:
         Initialized ChatbotAgent
     """
-    return ChatbotAgent(user_id, username)
+    return ChatbotAgent(user_id, username, api_key)
