@@ -1559,6 +1559,3 @@ async def execute_calendar_tool(user_id: int, tool_name: str, parameters: Dict[s
             'error': f"Unknown calendar tool: {tool_name}"
         }
 
-
-# Backward-compatible aliases (calendar only)
-# Combined tools are now in mcp_models/__init__.py
