@@ -1,9 +1,3 @@
-"""
-MCP Search Tools
-
-This module provides MCP (Model Context Protocol) tools for web search using DuckDuckGo.
-Includes web search, image search, and news search.
-"""
 
 from typing import Any, Dict, List, Optional
 import asyncio

@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 
 def get_all_work_items(user_id):
     """Fetch all active items (tasks, todos, meetings) for the user."""
-    # We fetch everything that is NOT completed
     query = """
     SELECT task_id, title, description, priority, due_date, category, status, created_at, start_time, end_time
     FROM tasks
@@ -27,7 +26,6 @@ def distinct_todo_page():
 
     user_id = st.session_state.user['id']
     
-    # Refresh & Filters logic
     col_filter1, col_filter2, col_refresh = st.columns([1, 1, 1])
     with col_filter1:
         filter_priority = st.selectbox("Priority", ["All", "Urgent", "High", "Medium", "Low"], key="filter_p")
@@ -55,7 +53,6 @@ def distinct_todo_page():
     if not items:
         st.info("🎉 Your workboard is empty! Ask the AI assistant to add tasks, meetings, or reminders.")
         return
-    
     tasks = []
     todos = []
     meetings = []
@@ -92,8 +89,6 @@ def distinct_todo_page():
             if filter_date == "Today":
                 if item_date != today: continue
             elif filter_date == "This Week":
-                # Simple logic: within next 7 days or same ISO week
-                # Let's use next 7 days + today
                 if not (today <= item_date <= today + timedelta(days=7)): continue
             elif filter_date == "Overdue":
                 if item_date >= today: continue
@@ -121,12 +116,13 @@ def distinct_todo_page():
         return priority_map.get(x['priority'].lower(), 4)
     
     tasks.sort(key=lambda x: (get_priority_val(x), x['due_date'] or datetime.max))
-    todos.sort(key=lambda x: (get_priority_val(x), x['due_date'] or x['created_at'] or datetime.max))
     
+    todos.sort(key=lambda x: (get_priority_val(x), x['due_date'] or x['created_at'] or datetime.max))
+
     def get_meeting_dt(x):
         d = x['due_date'] or datetime.max
         if x.get('start_time'):
-            if hasattr(d, 'date'):
+            if hasattr(d, 'date'): # it's datetime
                  return d
         return d
 
@@ -148,7 +144,7 @@ def distinct_todo_page():
             if item.get('end_time'):
                 time_part += f"-{item['end_time'].strftime('%H:%M')}"
             
-            if item.get('due_date'): 
+            if item.get('due_date'):
                  item_dt = item['due_date']
                  if hasattr(item_dt, 'date'): item_dt = item_dt.date()
                  date_str = item_dt.strftime('%b %d')

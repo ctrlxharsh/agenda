@@ -1,16 +1,9 @@
-"""
-Authorization Logic Layer
-
-OAuth flow helpers for third-party service connections.
-"""
+"""Authorization Logic Layer."""
 
 import streamlit as st
 from utils.google_auth import get_flow, GMAIL_SCOPES
 from pages.calendar.data import save_google_token_db
 import os
-
-
-
 
 def google_auth_flow():
     os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
