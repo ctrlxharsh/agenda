@@ -9,11 +9,7 @@ from utils.db import execute_query
 from utils.env_config import get_openai_api_key
 
 def fetch_todays_items(user_id: int) -> List[Dict[str, Any]]:
-    """
-    Fetch all items for the user that are relevant for today's plan.
-    Includes:
-    1. Items scheduled for TODAY (tasks, meetings,todo etc.)
-    """
+    """Fetch all items for the user that are relevant for today's plan."""
     query = """
     SELECT 
         task_id, title, description, status, priority, 
@@ -77,17 +73,13 @@ def update_task_times(updates: List[Dict[str, Any]]) -> bool:
         return False
 
 def generate_schedule_with_ai(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """
-    Use OpenAI to generate a schedule for the given items.
-    Respects fixed times for existing scheduled items (like meetings).
-    """
+    """Use OpenAI to generate a schedule for the given items."""
     if not items:
         return []
 
     api_key = get_openai_api_key()
     llm = ChatOpenAI(model="gpt-5-mini", temperature=0.2, api_key=api_key)
     
-    # Prepare items for the prompt
     items_json = json.dumps(items, default=str)
     current_date = date.today().strftime("%Y-%m-%d")
     
@@ -125,7 +117,6 @@ def generate_schedule_with_ai(items: List[Dict[str, Any]]) -> List[Dict[str, Any
     response = llm.invoke(messages)
     content = response.content.strip()
     
-    # helper to clean json markdown if present
     if content.startswith("```json"):
         content = content[7:]
     if content.endswith("```"):

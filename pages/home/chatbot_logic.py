@@ -18,14 +18,12 @@ from langchain_core.tools import StructuredTool
 from langgraph.prebuilt import create_react_agent
 
 from utils.env_config import get_openai_api_key
+from langfuse import Langfuse
 import mcp_models
 
-# Configure logging for observability
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-# Updated system prompt for interactive confirmation workflow
 SYSTEM_PROMPT = """You are a helpful AI assistant. You manage the user's calendar, tasks, meetings, and GitHub repositories.
 
 **Calendar Tools:**
@@ -140,31 +138,24 @@ class ChatbotAgent:
     """LangGraph-powered chatbot agent using create_react_agent."""
     
     def __init__(self, user_id: int, username: str):
-        """
-        Initialize the chatbot agent.
-        
-        Args:
-            user_id: ID of the user chatting
-            username: Username for personalization
-        """
         self.user_id = user_id
         self.username = username
         
         logger.info(f"Initializing ChatbotAgent for user_id={user_id}, username={username}")
         
-        # Initialize OpenAI client
         api_key = get_openai_api_key()
+        self.langfuse = Langfuse()
+        
         self.llm = ChatOpenAI(
-            model="gpt-5-mini",
+            model="gpt-4o-mini",
             temperature=0.6,
-            api_key=api_key
+            api_key=api_key,
+            stream_usage=True
         )
         
-        # Create tools from MCP server
         self.tools = self._create_langchain_tools()
         logger.info(f"Created {len(self.tools)} tools")
         
-        # Create the agent using LangGraph's prebuilt create_react_agent
         self.agent = create_react_agent(
             model=self.llm,
             tools=self.tools,
@@ -247,19 +238,8 @@ class ChatbotAgent:
         return langchain_tools
     
     async def chat_stream(self, user_message: str, chat_history: Optional[List[Dict]] = None) -> AsyncGenerator[Dict[str, Any], None]:
-        """
-        Process a user message and yield events from the agent.
-        
-        Args:
-            user_message: The user's message
-            chat_history: Previous chat messages (optional)
-            
-        Yields:
-            Dictionary containing event type and data
-        """
         logger.info(f"Chat Stream: Received - {user_message[:50]}...")
         
-        # Convert chat history to LangChain messages
         messages: List[BaseMessage] = []
         
         if chat_history:
@@ -269,39 +249,101 @@ class ChatbotAgent:
                 elif msg['role'] == 'assistant':
                     messages.append(AIMessage(content=msg['content']))
         
-        # Add current user message
         messages.append(HumanMessage(content=user_message))
         
         try:
-            # Stream events from the agent
-            async for event in self.agent.astream_events({"messages": messages}, version="v1"):
-                kind = event["event"]
-                
-                # Yield token events for streaming the response
-                if kind == "on_chat_model_stream":
-                    content = event["data"]["chunk"].content
-                    if content:
-                        yield {
-                            "type": "token",
-                            "content": content
-                        }
-                
-                # Yield tool start events
-                elif kind == "on_tool_start":
-                    yield {
-                        "type": "tool_start",
-                        "tool": event["name"],
-                        "input": event["data"].get("input")
-                    }
-                
-                # Yield tool end events
-                elif kind == "on_tool_end":
-                    yield {
-                        "type": "tool_end",
-                        "tool": event["name"],
-                        "output": event["data"].get("output")
-                    }
+            # Create trace for manual usage
+            try:
+                trace = self.langfuse.trace(
+                    name="chat",
+                    input=user_message,
+                    user_id=str(self.user_id)
+                )
+            except Exception as e:
+                logger.warning(f"Failed to initialize Langfuse trace: {e}")
+
+            full_response = ""
+            try:
+                async for event in self.agent.astream_events(
+                    {"messages": messages}, 
+                    version="v1",
+                    config={"callbacks": []} 
+                ):
+                    kind = event["event"]
                     
+                    if kind == "on_chat_model_stream":
+                        chunk = event["data"]["chunk"]
+                        content = chunk.content
+                        if content:
+                            full_response += content
+                            yield {
+                                "type": "token",
+                                "content": content
+                            }
+                        if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                            usage = chunk.usage_metadata
+                            logger.info(f"💰 DEBUG: Captured Token Usage from Chunk: {usage}")
+                            if 'trace' in locals() and trace:
+                                trace.generation(
+                                    name="llm_generation_stream",
+                                    model="gpt-4o-mini",
+                                    usage={
+                                        "promptTokens": usage.get("input_tokens", 0),
+                                        "completionTokens": usage.get("output_tokens", 0),
+                                        "totalTokens": usage.get("total_tokens", 0)
+                                    }
+                                )
+
+                    elif kind == "on_tool_start":
+                        yield {
+                            "type": "tool_start",
+                            "tool": event["name"],
+                            "input": event["data"].get("input")
+                        }
+                    
+                    elif kind == "on_tool_end":
+                        yield {
+                            "type": "tool_end",
+                            "tool": event["name"],
+                            "output": event["data"].get("output")
+                        }
+                    
+                    elif kind == "on_chat_model_end":
+                        try:
+                            output_data = event["data"].get("output")
+                            if output_data and hasattr(output_data, "response_metadata"):
+                                usage = output_data.response_metadata.get("token_usage")
+                                if usage:
+                                    logger.info(f"💰 DEBUG: Captured Token Usage: {usage}")
+                                    if 'trace' in locals() and trace:
+                                        # Create generation log
+                                        trace.generation(
+                                            name="llm_generation",
+                                            model="gpt-4o-mini",
+                                            usage={
+                                                "promptTokens": usage.get("prompt_tokens", 0),
+                                                "completionTokens": usage.get("completion_tokens", 0),
+                                                "totalTokens": usage.get("total_tokens", 0)
+                                            }
+                                        )
+                                else:
+                                    logger.warning("⚠️ DEBUG: response_metadata has NO token_usage")
+                            else:
+                                logger.warning(f"⚠️ DEBUG: No output or metadata in event. Data keys: {event['data'].keys()}")
+                        except Exception as trace_e:
+                            logger.warning(f"Failed to log generation usage: {trace_e}")
+            
+                # Update trace with final output
+                if 'trace' in locals() and trace:
+                    trace.update(output=full_response)
+            
+            except Exception as e:
+                # Log inner loop error
+                logger.error(f"Agent Loop failed: {e}")
+                if 'trace' in locals() and trace:
+                    trace.update(output=f"Error: {str(e)}", level="ERROR")
+                raise e # Re-raise to be caught by outer block
+        
         except Exception as e:
             logger.error(f"Chat Stream: Agent failed - {e}")
             yield {

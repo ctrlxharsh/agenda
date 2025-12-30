@@ -2,8 +2,6 @@ import streamlit as st
 from pages.login.logic import login_user, register_user
 
 def distinct_login_page():
-    # st.markdown("<div class='page-container'>", unsafe_allow_html=True) # Removed: unsafe/flakey
-    
     with st.container(border=True):
         st.title("Welcome to AGENDA")
         st.markdown("### Agent for Goal Execution, Navigation & Day Allocation")
@@ -37,4 +35,4 @@ def distinct_login_page():
                     else:
                         st.error("Username or Email might already represent an account.")
 
-    # st.markdown("</div>", unsafe_allow_html=True)
+

@@ -9,7 +9,6 @@ def distinct_profile_page():
     with st.container(border=True):
         st.subheader("Personal Details")
         
-        # We use current values as defaults
         new_email = st.text_input("Email", value=current_user.get('email', ''))
         new_name = st.text_input("Full Name", value=current_user.get('full_name', ''))
         

@@ -1,15 +1,14 @@
 import psycopg2
-import os
+from utils.env_config import get_db_connection_string
 from contextlib import contextmanager
 
-# Connection string (In a real app, use environment variables or st.secrets)
-DB_CONNECTION_STRING = "postgresql://neondb_owner:npg_EXNMFbcp61KB@ep-purple-butterfly-a1ghjpd1-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-
+DB_CONNECTION_STRING = get_db_connection_string()
+if not DB_CONNECTION_STRING:
+    raise ValueError("DATABASE_URL not found in environment variables. Please check your .env file.")
 @contextmanager
 def get_db_connection():
     """
     Context manager for database connections.
-    Yields a cursor and handles commit/rollback automatically.
     """
     conn = None
     try:
@@ -40,8 +39,5 @@ def execute_query(query, params=None, fetch_all=False, fetch_one=False):
 import asyncio
 
 async def execute_query_async(query, params=None, fetch_all=False, fetch_one=False):
-    """
-    Asynchronously executes a query and returns results if requested.
-    Wraps the synchronous execute_query in a thread.
-    """
+    """Asynchronously executes a query and returns results if requested."""
     return await asyncio.to_thread(execute_query, query, params, fetch_all, fetch_one)

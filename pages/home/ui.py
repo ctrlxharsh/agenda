@@ -3,12 +3,10 @@ import asyncio
 from pages.home.chatbot_logic import create_chatbot
 
 def distinct_home_page():
-    # Initialize chat history in session state
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
     if "chat_processing" not in st.session_state:
         st.session_state.chat_processing = False
-    # CSS for fixed clear button at top right
     st.markdown("""
     <style>
     .fixed-clear-btn {
@@ -20,12 +18,9 @@ def distinct_home_page():
     </style>
     """, unsafe_allow_html=True)
 
-        
-    # Fixed Clear button at top right
     with st.container():
         cols = st.columns([9, 2])
         with cols[0]:
-            # AI Assistant Header
             st.subheader("🤖 AI Assistant")
             st.caption("Ask me anything or manage your calendar with natural language!")
         with cols[1]:
@@ -33,7 +28,6 @@ def distinct_home_page():
                 st.session_state.chat_messages = []
                 st.rerun()
     
-    # Display chat messages
     if not st.session_state.chat_messages:
         st.info("👋 Hi! I can help you manage your calendar, create tasks, and schedule meetings. Try asking me something!")
     else:
@@ -41,33 +35,28 @@ def distinct_home_page():
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
     
-    # Chat input (Streamlit places this at the bottom automatically)
     if prompt := st.chat_input("Type your message here...", disabled=st.session_state.chat_processing):
-        # Add user message to chat history
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
         
-        # Display user message immediately
         with st.chat_message("user"):
             st.markdown(prompt)
         
-        # Set processing state
         st.session_state.chat_processing = True
         
-        # Get assistant response
         with st.chat_message("assistant"):
-            # Create chatbot instance
             chatbot = create_chatbot(
                 user_id=st.session_state.user['id'],
                 username=st.session_state.user['username']
             )
             
-            # Async function to handle streaming
             async def process_chat():
                 response_placeholder = st.empty()
                 full_response = ""
                 status_placeholder = st.empty()
                 
-                # We'll use a status container for tool execution
+                full_response = ""
+                status_placeholder = st.empty()
+                
                 with status_placeholder.status("Thinking...", expanded=True) as status:
                     async for event in chatbot.chat_stream(
                         user_message=prompt,
@@ -105,17 +94,13 @@ def distinct_home_page():
                     
                     status.update(label="Finished", state="complete", expanded=False)
                 
-                # Clear the status placeholder if you want it to disappear, or keep it collapsed
-                # status_placeholder.empty() 
+                    status.update(label="Finished", state="complete", expanded=False)
                 
                 response_placeholder.markdown(full_response)
                 return full_response
 
             try:
-                # Run the async process
                 response = asyncio.run(process_chat())
-                
-                # Add assistant response to chat history
                 st.session_state.chat_messages.append({"role": "assistant", "content": response})
                 
             except Exception as e:
@@ -123,5 +108,6 @@ def distinct_home_page():
                 st.error(error_message)
                 st.session_state.chat_messages.append({"role": "assistant", "content": error_message})
         
-        # Reset processing state
+
+        
         st.session_state.chat_processing = False

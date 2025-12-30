@@ -2,7 +2,6 @@ import streamlit as st
 from pages.home.logic import search_users, send_request, get_pending_requests, handle_request, get_my_collaborators, remove_collaborator
 
 def distinct_collaborators_page():
-    # Only Main Content here, sidebar handled in app.py or parent
     st.title("Manage Collaborators")
     
     tab1, tab2, tab3 = st.tabs(["My Team", "Add Collaborator", "Pending Requests"])
@@ -44,7 +43,6 @@ def distinct_collaborators_page():
                             st.write(f"**{res['username']}**")
                             st.caption(res['email'])
                         with c2:
-                            # Check if already collaborator
                             if res['id'] in current_user.get('collaborator_ids', []):
                                 st.success("Added")
                             else:

@@ -1,8 +1,3 @@
-"""
-Authorization UI
-
-Centralized panel for managing all third-party service connections.
-"""
 
 import streamlit as st
 from pages.authorization.data import (
@@ -22,10 +17,8 @@ def distinct_authorization_page():
     
     user_id = st.session_state.user['id']
     
-    # --- Google Services Section ---
     st.subheader("🔷 Google Integration")
     
-    # 1. Google Calendar
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -51,7 +44,6 @@ def distinct_authorization_page():
 
     st.markdown("") # Spacing
 
-    # 2. Gmail
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
         with col1:
@@ -77,7 +69,6 @@ def distinct_authorization_page():
     
     st.divider()
     
-    # --- GitHub Section ---
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
         
@@ -112,7 +103,6 @@ def distinct_authorization_page():
     
     st.divider()
     
-    # --- LinkedIn Section ---
     with st.container(border=True):
         col1, col2 = st.columns([3, 1])
         

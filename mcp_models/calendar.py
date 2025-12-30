@@ -1,9 +1,4 @@
-"""
-MCP Calendar Tools
 
-This module provides MCP (Model Context Protocol) tools for calendar management.
-Includes Google Calendar integration, task management, meeting scheduling, and collaborator handling.
-"""
 
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
@@ -15,24 +10,10 @@ import asyncio
 
 
 class MCPCalendarTools:
-    """MCP server providing calendar management tools."""
-    
     def __init__(self, user_id: int):
-        """
-        Initialize MCP Calendar Tools for a specific user.
-        
-        Args:
-            user_id: The ID of the user making the request
-        """
         self.user_id = user_id
     
     async def get_google_credentials(self) -> Optional[Credentials]:
-        """
-        Retrieve Google Calendar credentials for the user.
-        
-        Returns:
-            Google OAuth credentials if available, None otherwise
-        """
         query = """
         SELECT access_token, refresh_token, token_expiry, token_uri, 
                client_id, client_secret, scopes 
@@ -67,23 +48,7 @@ class MCPCalendarTools:
         category: str = "general",
         meeting_link: str = ""
     ) -> Dict[str, Any]:
-        """
-        Add a task or event to the calendar and database.
-        
-        Args:
-            title: Task/Event title
-            description: Description
-            due_date: Deadline/completion DATE (YYYY-MM-DD)
-            scheduled_date: When task is scheduled DATE (YYYY-MM-DD)
-            start_time: Start TIME (HH:MM)
-            end_time: End TIME (HH:MM)
-            priority: Priority (low, medium, high, urgent)
-            category: Category
-            meeting_link: Optional meeting link
-            
-        Returns:
-            Dict containing task_id, event_id, and status message
-        """
+
         try:
             # Parse due date (DATE only)
             parsed_due_date = None
@@ -289,16 +254,7 @@ class MCPCalendarTools:
         search_query: str,
         search_type: str = "any"
     ) -> Dict[str, Any]:
-        """
-        Search for collaborators within the user's friend network.
-        
-        Args:
-            search_query: Search term (name, email, or username)
-            search_type: Type of search - "name", "email", "username", or "any"
-            
-        Returns:
-            Dict containing list of matching collaborators
-        """
+
         try:
             # Get user's friend network
             user_query = "SELECT collaborator_ids FROM users WHERE id = %s"
@@ -392,17 +348,7 @@ class MCPCalendarTools:
         collaborator_ids: Optional[List[int]] = None,
         collaborator_emails: Optional[List[str]] = None
     ) -> Dict[str, Any]:
-        """
-        Add collaborators to an existing event and sync to Google Calendar.
-        
-        Args:
-            event_id: ID of the event
-            collaborator_ids: List of user IDs to add as collaborators (from friends list)
-            collaborator_emails: List of email addresses to invite (can be anyone)
-            
-        Returns:
-            Dict containing success status and message
-        """
+
         try:
             added_collaborators = []
             
@@ -548,16 +494,7 @@ class MCPCalendarTools:
         event_id: int,
         existing_code: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        Generate or attach a Google Meet link to an event.
-        
-        Args:
-            event_id: ID of the event
-            existing_code: Optional existing meeting code/link provided by user
-            
-        Returns:
-            Dict containing meeting link and status
-        """
+
         try:
             # If user provided existing link/code
             if existing_code:
@@ -697,22 +634,7 @@ class MCPCalendarTools:
         priority: str = "medium",
         category: str = "general"
     ) -> Dict[str, Any]:
-        """
-        Save a task to the database without creating a calendar event.
-        
-        Args:
-            title: Task title
-            description: Task description
-            due_date: Deadline/completion DATE (YYYY-MM-DD)
-            scheduled_date: When task is scheduled DATE (YYYY-MM-DD)
-            start_time: Start TIME (HH:MM)
-            end_time: End TIME (HH:MM)
-            priority: Task priority
-            category: Task category
-            
-        Returns:
-            Dict containing task_id and status
-        """
+
         try:
             # Parse due date (DATE only)
             parsed_due_date = None
@@ -812,27 +734,7 @@ class MCPCalendarTools:
         auto_generate_link: bool = True,
         duration_hours: float = 2.0
     ) -> Dict[str, Any]:
-        """
-        Schedule a meeting with collaborators and meeting link.
-        All-in-one tool for complete meeting creation.
-        
-        Args:
-            title: Meeting title
-            scheduled_date: Scheduled DATE (YYYY-MM-DD)
-            start_time: Start TIME (HH:MM or HH:MM:SS)
-            end_time: End TIME (optional)
-            due_date: Deadline/completion date (optional, defaults to scheduled_date)
-            priority: Priority (low, medium, high, urgent)
-            description: Meeting description
-            collaborator_ids: List of collaborator user IDs (from friends list)
-            collaborator_emails: List of email addresses to invite
-            meeting_code: Existing meeting code/link
-            auto_generate_link: Whether to auto-generate Google Meet link
-            duration_hours: Duration in hours (used if end_time not provided)
-            
-        Returns:
-            Dict containing event details and status
-        """
+        """Schedule a meeting with collaborators and meeting link."""
         try:
             # Parse scheduled date (DATE only)
             parsed_scheduled_date = None
@@ -890,7 +792,7 @@ class MCPCalendarTools:
             else:
                 # Calculate end_time from duration
                 start_dt_for_calc = datetime.combine(parsed_scheduled_date, parsed_start_time)
-                end_dt_for_calc = start_dt_for_calc + timedelta(hours=duration_hours)
+                end_dt_for_calc = start_dt_for_calc + timedelta(hours=float(duration_hours))
                 parsed_end_time = end_dt_for_calc.time()
 
             # Construct datetimes for Google Calendar
@@ -1057,17 +959,7 @@ class MCPCalendarTools:
         end_date: str,
         limit: int = 50
     ) -> Dict[str, Any]:
-        """
-        Get calendar events within a date range.
-        
-        Args:
-            start_date: Start date (YYYY-MM-DD or ISO)
-            end_date: End date (YYYY-MM-DD or ISO)
-            limit: Max records to return
-            
-        Returns:
-            Dict containing list of events
-        """
+        """Get calendar events within a date range."""
         try:
             # Parse dates
             try:
@@ -1171,19 +1063,7 @@ class MCPCalendarTools:
         end_time: Optional[str] = None,
         duration_hours: Optional[float] = 2.0
     ) -> Dict[str, Any]:
-        """
-        Check for scheduling conflicts on a given date/time.
-        Checks tasks.scheduled_date and start_time/end_time for overlaps.
-        
-        Args:
-            scheduled_date: The proposed scheduled date (YYYY-MM-DD)
-            start_time: The proposed start time (HH:MM)
-            end_time: The proposed end time (HH:MM)
-            duration_hours: Expected duration in hours (default: 2.0)
-            
-        Returns:
-            Dict containing conflicts and suggested alternative times
-        """
+        """Check for scheduling conflicts on a given date/time."""
         try:
             # Parse scheduled date
             try:

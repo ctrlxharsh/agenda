@@ -5,7 +5,6 @@ def update_profile(email, full_name):
     user_id = st.session_state.user['id']
     try:
         update_user_details_db(user_id, email, full_name)
-        # Update session state to reflect changes immediately
         st.session_state.user['email'] = email
         st.session_state.user['full_name'] = full_name
         st.success("Profile updated successfully!")

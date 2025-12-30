@@ -11,52 +11,7 @@ import os
 
 
 
-def google_auth_flow():
-    """
-    Handles the Google Calendar OAuth flow.
-    Returns True if already connected or connection successful.
-    """
-    # Allow oauthlib to accept scope changes
-    os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
-    
-    if not os.path.exists("client_secret.json"):
-        st.error("Google Calendar is not configured.")
-        st.info("Admin: Please place `client_secret.json` in the app root to enable this feature.")
-        return False
-    
-    flow = get_flow() # Default scopes are Calendar
-    if not flow:
-        st.error("Failed to initialize Google OAuth flow.")
-        return False
-    
-    # Generate authorization URL
-    auth_url, _ = flow.authorization_url(prompt='consent')
-    
-    st.write("Authorize access to your Google Calendar:")
-    st.link_button("🔗 Connect Google Calendar", auth_url)
-    
-    # Handle callback (Streamlit reloads with params)
-    query_params = st.query_params
-    if "code" in query_params and query_params.get("state") != "gmail": # Simple way to distinguish? No, query_params are global.
-        # We need a way to distinguish which flow initiated the callback.
-        # Usually 'state' parameter is used. 
-        # Streamlit query params persistence is tricky. 
-        # For now, let's assume if there's a code, we try to exchange it. 
-        # BUT if we have two buttons, we must know which one.
-        # Let's check a specialized query param or just try both?
-        # A cleaner way is to use the `state` param in OAuth flow.
-        pass
 
-    # Since we can't easily modify the callback URL handler without shared state, 
-    # we'll use a specific query param trigger or just rely on the user clicking the right 'Complete' button if we were doing manual.
-    # But here it's auto-rerun.
-    
-    # PROPOSAL: Use a 'type' param in the redirect URI if possible? No, redirect_uri is fixed in console usually.
-    # We can use the 'state' parameter. get_flow doesn't expose it easily but flow.authorization_url does.
-    
-    return False
-
-# Redefining to actually implement the logic with state check
 def google_auth_flow():
     os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
     if not os.path.exists("client_secret.json"):
@@ -92,9 +47,7 @@ def google_auth_flow():
 
 
 def gmail_auth_flow():
-    """
-    Handles the Gmail OAuth flow.
-    """
+    """Handles the Gmail OAuth flow."""
     from pages.calendar.data import save_gmail_token_db
     
     os.environ['OAUTHLIB_RELAX_TOKEN_SCOPE'] = '1'
@@ -130,10 +83,7 @@ def gmail_auth_flow():
 
 
 def github_auth_flow():
-    """
-    Handles the GitHub OAuth flow.
-    Returns True if already connected or connection successful.
-    """
+    """Handles the GitHub OAuth flow."""
     from utils.github_auth import (
         get_authorization_url, 
         exchange_code_for_token, 
@@ -157,7 +107,7 @@ def github_auth_flow():
     st.write("Authorize access to your GitHub account:")
     st.link_button("🔗 Connect GitHub Account", auth_url)
     
-    # Handle callback (Streamlit reloads with params)
+
     query_params = st.query_params
     if "code" in query_params and "state" in query_params:
         code = query_params["code"]
@@ -195,9 +145,7 @@ def github_auth_flow():
 
 
 def linkedin_auth_flow():
-    """
-    Placeholder for LinkedIn OAuth flow.
-    """
+    """Placeholder for LinkedIn OAuth flow."""
     st.info("🚧 LinkedIn integration coming soon!")
     return False
 
