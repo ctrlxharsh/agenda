@@ -890,7 +890,7 @@ class MCPCalendarTools:
             else:
                 # Calculate end_time from duration
                 start_dt_for_calc = datetime.combine(parsed_scheduled_date, parsed_start_time)
-                end_dt_for_calc = start_dt_for_calc + timedelta(hours=duration_hours)
+                end_dt_for_calc = start_dt_for_calc + timedelta(hours=float(duration_hours))
                 parsed_end_time = end_dt_for_calc.time()
 
             # Construct datetimes for Google Calendar
@@ -1679,6 +1679,3 @@ async def execute_calendar_tool(user_id: int, tool_name: str, parameters: Dict[s
             'error': f"Unknown calendar tool: {tool_name}"
         }
 
-
-# Backward-compatible aliases (calendar only)
-# Combined tools are now in mcp_models/__init__.py
