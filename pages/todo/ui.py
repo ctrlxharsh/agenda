@@ -33,7 +33,7 @@ def distinct_todo_page():
         filter_date = st.selectbox("Date", ["All", "Today", "This Week", "Overdue", "Custom Range"], key="filter_d")
     with col_refresh:
         st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True) # Spacer for label alignment
-        if st.button("🔄 Refresh", use_container_width=True):
+        if st.button("🔄 Refresh", width="stretch"):
             st.rerun()
     
     custom_start_date = None

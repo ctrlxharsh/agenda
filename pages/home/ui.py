@@ -29,7 +29,7 @@ def distinct_home_page():
             st.subheader("🤖 AI Assistant")
             st.caption("Ask me anything or manage your calendar with natural language!")
         with cols[1]:
-            if st.button("Clear chat history 🗑️", use_container_width=True):
+            if st.button("Clear chat history 🗑️", width="stretch"):
                 st.session_state.chat_messages = []
                 st.rerun()
     

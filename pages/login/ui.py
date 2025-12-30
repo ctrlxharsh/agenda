@@ -7,7 +7,7 @@ def distinct_login_page():
     
     # Left Column - Image
     with left_col:
-        st.image("assets/agenda.png", use_container_width=True)
+        st.image("assets/agenda.png", width="stretch")
         # Add some branding text below the image
         st.markdown("""
         <div style='text-align: center; padding: 20px;'>
@@ -32,7 +32,7 @@ def distinct_login_page():
                 with st.form("login_form"):
                     username = st.text_input("Username", placeholder="Enter your username")
                     password = st.text_input("Password", type="password", placeholder="Enter your password")
-                    submitted = st.form_submit_button("Login", use_container_width=True, type="primary")
+                    submitted = st.form_submit_button("Login", width="stretch", type="primary")
                     
                     if submitted:
                         if login_user(username, password):
@@ -48,7 +48,7 @@ def distinct_login_page():
                     new_pass = st.text_input("Password", type="password", placeholder="Create a password")
                     email = st.text_input("Email", placeholder="your.email@example.com")
                     full_name = st.text_input("Full Name", placeholder="John Doe")
-                    signup_submitted = st.form_submit_button("Sign Up", use_container_width=True, type="primary")
+                    signup_submitted = st.form_submit_button("Sign Up", width="stretch", type="primary")
                     
                     if signup_submitted:
                         if register_user(new_user, new_pass, email, full_name):

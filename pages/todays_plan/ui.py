@@ -15,7 +15,7 @@ def distinct_todays_plan_page():
 
     col1, col2 = st.columns([1, 4])
     with col1:
-        if st.button("✨ Generate Plan", type="primary", use_container_width=True):
+        if st.button("✨ Generate Plan", type="primary", width="stretch"):
             api_key = st.session_state.get('openai_api_key')
             if not api_key:
                 st.error("Please enter your OpenAI API key in the sidebar settings first.")

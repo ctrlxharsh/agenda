@@ -12,8 +12,9 @@ def google_auth_flow():
         st.error("Google Calendar is not configured. Missing client_secret.json or GOOGLE_CLIENT_ID/SECRET env vars.")
         return False
     
-    # We use state='calendar' to identify this flow
-    auth_url, state = flow.authorization_url(prompt='consent', state='calendar')
+    # We use state='calendar|user_id' to identify this flow and recover session
+    user_id = st.session_state.user['id']
+    auth_url, state = flow.authorization_url(prompt='consent', state=f'calendar|{user_id}')
     
     st.write("Authorize access to Google Calendar:")
     st.link_button("🔗 Connect Calendar", auth_url)
@@ -24,7 +25,7 @@ def google_auth_flow():
         # Google returns state param back
         returned_state = query_params.get("state")
         
-        if returned_state == 'calendar':
+        if returned_state and str(returned_state).startswith('calendar'):
             try:
                 flow.fetch_token(code=query_params["code"])
                 creds = flow.credentials
@@ -49,8 +50,9 @@ def gmail_auth_flow():
         st.error("Google Client Secrets not configured.")
         return False
     
-    # State='gmail' to distinguish
-    auth_url, state = flow.authorization_url(prompt='consent', state='gmail')
+    # State='gmail|user_id' to distinguish
+    user_id = st.session_state.user['id']
+    auth_url, state = flow.authorization_url(prompt='consent', state=f'gmail|{user_id}')
     
     st.write("Authorize access to Gmail:")
     st.link_button("🔗 Connect Gmail", auth_url)
@@ -59,7 +61,7 @@ def gmail_auth_flow():
     if "code" in query_params:
         returned_state = query_params.get("state")
         
-        if returned_state == 'gmail':
+        if returned_state and str(returned_state).startswith('gmail'):
             try:
                 flow.fetch_token(code=query_params["code"])
                 creds = flow.credentials
@@ -88,13 +90,16 @@ def github_auth_flow():
         return False
     
     # Generate authorization URL
-    auth_url = get_authorization_url()
+    user_id = st.session_state.user['id']
+    auth_url = get_authorization_url(state=f"github_auth|{user_id}")
     
     if not auth_url:
         st.error("Failed to generate GitHub authorization URL.")
         return False
     
     st.write("Authorize access to your GitHub account:")
+    # st.write(f"Debug URL: {auth_url}") # Uncomment to view generated URL in UI
+    print(f"DEBUG GITHUB URL: {auth_url}")
     st.link_button("🔗 Connect GitHub Account", auth_url)
     
 
