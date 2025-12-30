@@ -135,7 +135,7 @@ Be conversational, friendly, and HELPFUL. Guide the user through the process nat
 class ChatbotAgent:
     """LangGraph-powered chatbot agent using create_react_agent."""
     
-    def __init__(self, user_id: int, username: str, api_key: Optional[str] = None):
+    def __init__(self, user_id: int, username: str, api_key: Optional[str] = None, model_name: str = "gpt-4o"):
         """
         Initialize the chatbot agent.
         
@@ -143,10 +143,12 @@ class ChatbotAgent:
             user_id: ID of the user chatting
             username: Username for personalization
             api_key: Optional openai api key
+            model_name: Name of the OpenAI model to use
         """
         self.user_id = user_id
         self.username = username
         self.api_key = api_key
+        self.model_name = model_name
         
         if not self.api_key:
             raise ValueError("OpenAI API Key is required. Please set it in the sidebar settings.")
@@ -155,7 +157,7 @@ class ChatbotAgent:
         
         logger.info(f"Initializing ChatbotAgent for user_id={user_id}, username={username}")
         self.llm = ChatOpenAI(
-            model="gpt-5-mini",
+            model=self.model_name,
             temperature=0.6,
             api_key=self.api_key
         )
@@ -319,7 +321,7 @@ class ChatbotAgent:
             return "Error: Synchronous chat called in async context. Use chat_stream."
 
 
-def create_chatbot(user_id: int, username: str, api_key: Optional[str] = None) -> ChatbotAgent:
+def create_chatbot(user_id: int, username: str, api_key: Optional[str] = None, model_name: str = "gpt-4o") -> ChatbotAgent:
     """
     Factory function to create a chatbot agent.
     
@@ -330,4 +332,4 @@ def create_chatbot(user_id: int, username: str, api_key: Optional[str] = None) -
     Returns:
         Initialized ChatbotAgent
     """
-    return ChatbotAgent(user_id, username, api_key)
+    return ChatbotAgent(user_id, username, api_key, model_name)

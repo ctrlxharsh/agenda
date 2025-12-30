@@ -116,7 +116,8 @@ def distinct_home_page():
                 chatbot = create_chatbot(
                     user_id=st.session_state.user['id'],
                     username=st.session_state.user['username'],
-                    api_key=api_key.strip()
+                    api_key=api_key.strip(),
+                    model_name=st.session_state.get('openai_model', 'gpt-4o')
                 )
                 
                 # Run the async process

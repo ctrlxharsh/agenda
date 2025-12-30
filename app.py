@@ -117,7 +117,17 @@ def main():
             # API Key Input - Using shadowing pattern for better persistence
             if "openai_api_key" not in st.session_state:
                 st.session_state.openai_api_key = ""
+            if "openai_model" not in st.session_state:
+                st.session_state.openai_model = "gpt-5-mini"
                 
+            # Model Selection
+            st.selectbox(
+                "AI Model",
+                ["gpt-5.2", "gpt-5-mini", "gpt-5-nano", "gpt-4o-mini", "gpt-4-turbo"],
+                key="openai_model",
+                help="Select the OpenAI model to use."
+            )
+            
             current_key = st.text_input(
                 "OpenAI API Key", 
                 value=st.session_state.openai_api_key,

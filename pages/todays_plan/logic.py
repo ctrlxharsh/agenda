@@ -81,7 +81,8 @@ def generate_schedule_with_ai(items: List[Dict[str, Any]], api_key: str = None) 
         print("OpenAI API Key is missing.")
         return []
 
-    llm = ChatOpenAI(model="gpt-5-mini", temperature=0.2, api_key=api_key)
+    model_name = st.session_state.get("openai_model", "gpt-4o")
+    llm = ChatOpenAI(model=model_name, temperature=0.2, api_key=api_key)
     
     items_json = json.dumps(items, default=str)
     current_date = date.today().strftime("%Y-%m-%d")
