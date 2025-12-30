@@ -24,6 +24,22 @@ def main():
     if not st.session_state.authenticated:
         distinct_login_page()
     else:
+        # Auto-route to Authorization page if OAuth callback is detected
+        # Check standard query params location (Streamlit >= 1.30)
+        query_params = st.query_params
+        
+        if "code" in query_params and "state" in query_params:
+            state_val = query_params["state"]
+            print(f"DEBUG: Auth callback detected. State: {state_val}, Code present.")
+            
+            # Handle list if older streamlit version or unexpected behavior
+            if isinstance(state_val, list):
+                state_val = state_val[0]
+            
+            if state_val in ["github_auth", "calendar", "gmail"]:
+                st.session_state.current_page = "Authorization"
+                print("DEBUG: Routing to Authorization page.")
+
         if "current_page" not in st.session_state:
             st.session_state.current_page = "Dashboard"
 

@@ -147,7 +147,7 @@ class ChatbotAgent:
         self.langfuse = Langfuse()
         
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
+            model="gpt-5-mini",
             temperature=0.6,
             api_key=api_key,
             stream_usage=True
