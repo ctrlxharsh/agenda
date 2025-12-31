@@ -26,7 +26,7 @@ def auth_flow_step():
     """Handles the UI/Logic for starting Authorization."""
     flow = get_flow()
     if not flow:
-        st.error("Missing `client_secret.json`. Please add it to the project root to enable Google Calendar.")
+        st.error("Google Auth is not configured properly. Please check your environment variables or `client_secret.json`.")
         return
     
     auth_url, _ = flow.authorization_url(prompt='consent')

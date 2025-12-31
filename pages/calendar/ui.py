@@ -1,15 +1,16 @@
 import streamlit as st
 from streamlit_calendar import calendar
 from pages.calendar.logic import get_calendar_service, auth_flow_step, get_events_by_range
+from utils.google_auth import is_google_auth_configured
 from datetime import datetime, timedelta
 
 def distinct_calendar_page():
     st.title("My Calendar")
     user_id = st.session_state.user['id']
-    import os
-    if not os.path.exists("client_secret.json"):
+    
+    if not is_google_auth_configured():
         st.error("Google Login is not configured.")
-        st.info("Admin: Please place `client_secret.json` in the app root to enable this feature.")
+        st.info("Admin: Please set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in environment variables or place `client_secret.json` in the app root.")
         return
 
 

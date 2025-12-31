@@ -47,7 +47,7 @@ def gmail_auth_flow():
     flow = get_flow(override_scopes=GMAIL_SCOPES)
     
     if not flow:
-        st.error("Google Client Secrets not configured.")
+        st.error("Google Gmail is not configured. Missing client_secret.json or GOOGLE_CLIENT_ID/SECRET env vars.")
         return False
     
     # State='gmail|user_id' to distinguish

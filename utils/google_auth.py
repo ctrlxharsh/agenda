@@ -10,17 +10,16 @@ GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 CLIENT_SECRETS_FILE = "client_secret.json"
 
 import streamlit as st
-
 from utils.env_config import EnvConfig
 
 # Standard Google OAuth 2.0 endpoints
 GOOGLE_AUTH_URI = "https://accounts.google.com/o/oauth2/auth"
 GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token"
 
-def _get_val(key):
-    if key in st.secrets:
-        return str(st.secrets[key])
-    return os.getenv(key)
+def is_google_auth_configured():
+    if os.path.exists(CLIENT_SECRETS_FILE):
+        return True
+    return bool(EnvConfig.get_google_client_id() and EnvConfig.get_google_client_secret())
 
 def get_flow(additional_scopes=None, override_scopes=None):
     if override_scopes:
@@ -37,8 +36,8 @@ def get_flow(additional_scopes=None, override_scopes=None):
             
     # Priority 2: Check for secrets/env vars
     else:
-        client_id = _get_val("GOOGLE_CLIENT_ID")
-        client_secret = _get_val("GOOGLE_CLIENT_SECRET")
+        client_id = EnvConfig.get_google_client_id()
+        client_secret = EnvConfig.get_google_client_secret()
         
         if client_id and client_secret:
             client_config = {

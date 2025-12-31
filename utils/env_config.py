@@ -48,6 +48,14 @@ class EnvConfig:
         return EnvConfig._get_val("GITHUB_CLIENT_SECRET")
         
     @staticmethod
+    def get_google_client_id() -> Optional[str]:
+        return EnvConfig._get_val("GOOGLE_CLIENT_ID")
+    
+    @staticmethod
+    def get_google_client_secret() -> Optional[str]:
+        return EnvConfig._get_val("GOOGLE_CLIENT_SECRET")
+        
+    @staticmethod
     def get_app_url() -> str:
         """Get the base application URL (e.g. for redirects)."""
         return EnvConfig._get_val("APP_URL", "http://localhost:8501")
