@@ -47,7 +47,7 @@ class MCPGmailTools:
                 }
             
             def _send_message():
-                service = build('gmail', 'v1', credentials=creds)
+                service = build('gmail', 'v1', credentials=creds, cache_discovery=False)
                 
                 message = MIMEText(body)
                 message['to'] = to
@@ -92,7 +92,7 @@ class MCPGmailTools:
                 }
             
             def _fetch_emails():
-                service = build('gmail', 'v1', credentials=creds)
+                service = build('gmail', 'v1', credentials=creds, cache_discovery=False)
                 
                 # List messages
                 results = service.users().messages().list(

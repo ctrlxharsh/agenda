@@ -20,7 +20,7 @@ def get_calendar_service(user_id):
         scopes=token_data['scopes']
     )
     
-    return build('calendar', 'v3', credentials=creds)
+    return build('calendar', 'v3', credentials=creds, cache_discovery=False)
 
 def auth_flow_step():
     """Handles the UI/Logic for starting Authorization."""

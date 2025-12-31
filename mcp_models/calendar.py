@@ -185,7 +185,7 @@ class MCPCalendarTools:
             else:
                 try:
                     def _sync_google():
-                        service = build('calendar', 'v3', credentials=creds)
+                        service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
                         
                         event_body = {
                             'summary': f"📋 {title}",
@@ -440,7 +440,7 @@ class MCPCalendarTools:
                 if creds:
                     try:
                         def _sync_attendees():
-                            service = build('calendar', 'v3', credentials=creds)
+                            service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
                             
                             # Get current event
                             event = service.events().get(
@@ -548,7 +548,7 @@ class MCPCalendarTools:
                 google_event_id = event_result[0]
                 
                 def _generate_meet_link():
-                    service = build('calendar', 'v3', credentials=creds)
+                    service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
                     
                     # Get current event from Google Calendar
                     event = service.events().get(
@@ -853,7 +853,7 @@ class MCPCalendarTools:
             if creds:
                 try:
                     def _sync_meeting():
-                        service = build('calendar', 'v3', credentials=creds)
+                        service = build('calendar', 'v3', credentials=creds, cache_discovery=False)
                         
                         event_body = {
                             'summary': f"🤝 {title}",
